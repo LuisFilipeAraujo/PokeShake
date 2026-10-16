@@ -147,6 +147,7 @@ class CatchMode(QObject):
         self.pressionado_em = QPointF(0, 0)
         self.proxima_bola = 0.0
         self.silencio_ate = 0.0
+        self.primeira_bola = True
         self.iniciado = 0.0
         self.ativo = False
         self._ultimo = time.monotonic()
@@ -168,6 +169,7 @@ class CatchMode(QObject):
         self.ativo = True
         self.iniciado = self._ultimo = time.monotonic()
         self.silencio_ate = 0.0
+        self.primeira_bola = True
         self.canvas = Canvas(self.draw)
         self.canvas.show()
         self.pointer.watch_gesture = True
@@ -177,6 +179,7 @@ class CatchMode(QObject):
         self._reagenda_spawn()
         self.solta_pokemon()
         self.pede_bola()
+        self.proxima_bola = self.iniciado + 5.0   # o step não pede de novo junto
 
     def stop(self):
         if not self.ativo:
@@ -218,6 +221,10 @@ class CatchMode(QObject):
             data, is_gif = sprites.fetch_pokemon(pid)
             if data:
                 self.pokemon_ready.emit(pid, data, is_gif)
+                # o nome vem depois de entregar o sprite, e aqui na thread de
+                # fundo: na frente do emit, a aparição esperaria o timeout da
+                # lista de nomes; na thread da interface, congelaria a captura
+                sprites.prefetch_names()
         threading.Thread(target=worker, daemon=True).start()
 
     def _em_captura(self) -> bool:
@@ -268,6 +275,11 @@ class CatchMode(QObject):
                          Qt.TransformationMode.SmoothTransformation)
         self.ball = Ball(kind, pix, self._cursor())
         self.ball.escala = 0.1          # cresce ao aparecer
+        if self.primeira_bola:
+            # a dica só faz sentido com bola na mão: sem rede, o relógio dela
+            # venceria antes de existir o que arremessar
+            self.primeira_bola = False
+            self.iniciado = time.monotonic()
 
     def _cursor(self) -> QPointF:
         pos = self.pointer.pos
@@ -371,8 +383,11 @@ class CatchMode(QObject):
     def _area_hud(self) -> QRect:
         tela = QApplication.primaryScreen().geometry()
         origem = self.canvas.geometry().topLeft()
+        # a altura acompanha as linhas de agora: uma linha fora da região suja
+        # apareceria cortada, ou só quando outra coisa sujasse aquele pedaço
+        linhas = len(self._linhas_hud(time.monotonic()))
         return QRect(tela.center().x() - origem.x() - 500,
-                     tela.top() - origem.y() + 16, 1000, 90)
+                     tela.top() - origem.y() + 16, 1000, 24 + 38 * linhas)
 
     def _step_bola_na_mao(self, agora, dt):
         bola = self.ball
@@ -545,7 +560,12 @@ class CatchMode(QObject):
 
     def _linhas_hud(self, agora):
         linhas = [f"Capturados: {self.capturados}"]
-        if agora - self.iniciado < cfg.HUD_HINT_S:
+        if sprites.falhas.recente():
+            # sem este aviso o modo fica mudo: nada aparece na tela e nada
+            # explica o motivo, então parece que o programa travou
+            linhas.append(f"Não consegui baixar {sprites.falhas.assunto}: "
+                          f"{sprites.falhas.motivo}. Tentando de novo...")
+        elif agora - self.iniciado < cfg.HUD_HINT_S:
             linhas.append(f"Segure {cfg.GESTO_NOME} e arremesse na direção do "
                           f"Pokémon  ·  Esc sai do modo")
         elif agora < self.silencio_ate and not self.wilds:

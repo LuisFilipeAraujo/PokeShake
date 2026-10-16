@@ -1,6 +1,7 @@
 """Monta o aplicativo: bandeja, menu de modos e a troca entre eles."""
 import signal
 import sys
+import time
 
 from PyQt6.QtCore import QObject, QTimer
 from PyQt6.QtGui import QAction
@@ -23,12 +24,14 @@ class PokeShake(QObject):
         self.shake = ShakeMode(self.pointer, self)
         self.catch = CatchMode(self.pointer, self)
         self.modo = "off"
+        self._ultimo_aviso = 0.0
 
         self.menu = OverlayMenu()
         self.menu.modo_escolhido.connect(self.set_modo)
         self.menu.sair.connect(app.quit)
         self.pointer.escape_pressed.connect(lambda: self.set_modo("off"))
         self.catch.captured.connect(self._capturou)
+        self.shake.download_falhou.connect(self._download_falhou)
 
         self.tray = self._montar_bandeja()
         app.aboutToQuit.connect(self.cleanup)
@@ -85,6 +88,21 @@ class PokeShake(QObject):
     def _capturou(self, nome):
         self.tray.setToolTip(f"PokeShake — {nome} capturado! "
                              f"({self.catch.capturados} no total)")
+
+    def _download_falhou(self, motivo):
+        """O modo Agitada não tem onde escrever na tela, então o aviso vai para
+        a bandeja — uma vez por janela de aviso, para não virar enxurrada."""
+        agora = time.monotonic()
+        if agora - self._ultimo_aviso < cfg.AVISO_FALHA_S:
+            return
+        self._ultimo_aviso = agora
+        texto = f"Não consegui baixar o sprite: {motivo}."
+        print(texto)
+        # o balão é transitório e pode estar silenciado pelo Windows; a dica do
+        # ícone fica, para quem for conferir o que está acontecendo
+        self.tray.setToolTip(f"PokeShake — {texto} Tentando de novo.")
+        if self.tray.supportsMessages():
+            self.tray.showMessage("PokeShake", texto, pokeball_icon(), 4000)
 
     def cleanup(self):
         self.shake.stop()

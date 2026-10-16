@@ -129,3 +129,20 @@ def test_custo_de_um_quadro(catch, pikachu, pokebola, processa):
     assert len(tempos) > 60, f"só {len(tempos)} quadros em 3s"
     mediana = sorted(tempos)[len(tempos) // 2]
     assert mediana < 8, f"paint em {mediana:.1f}ms por quadro"
+
+
+def test_regiao_do_hud_cobre_a_ultima_linha(catch):
+    """A terceira linha caía 26px fora da faixa marcada como suja: apareceria
+    cortada, ou só quando outra coisa sujasse aquele pedaço da tela."""
+    sprites.falhas.registrar("sem conexão")
+    try:
+        linhas = catch._linhas_hud(time.monotonic())
+        assert len(linhas) >= 2
+        area = catch._area_hud()
+        tela = QApplication.primaryScreen().geometry()
+        origem = catch.canvas.geometry().topLeft()
+        topo = tela.top() - origem.y() + 24          # mesma conta do _hud
+        base_da_ultima = topo + (len(linhas) - 1) * 38 + 32
+        assert base_da_ultima <= area.bottom()
+    finally:
+        sprites.falhas.limpar()

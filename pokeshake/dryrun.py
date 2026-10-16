@@ -9,6 +9,7 @@ deixa o dry run utilizável tanto na mão quanto dentro dos testes.
 """
 import time
 
+import requests
 from PyQt6.QtCore import QObject, QPoint, QTimer
 
 from . import config as cfg
@@ -16,6 +17,16 @@ from . import pointer as ptr
 from . import sprites
 from .catch import Wild
 from PyQt6.QtCore import QPointF
+
+
+class SessaoMorta:
+    """Sem rota para o host: derruba a rede dentro do dry run, para conferir
+    que o app avisa em vez de ficar mudo."""
+
+    headers = {}
+
+    def get(self, *a, **k):
+        raise requests.ConnectionError("queda de rede simulada pelo dry run")
 
 
 class EntradaVirtual:
@@ -166,6 +177,9 @@ class DryRun(QObject):
 
         def confere_sprite():
             if not shake.popups:
+                if sprites.falhas.recente():
+                    # sem isso o relatório culpa o detector de agitada
+                    return f"download falhou: {sprites.falhas.motivo}"
                 return "nenhum Pokémon apareceu depois da agitada"
             janela = shake.popups[0]
             if janela.width() < 20 or janela.height() < 20:
@@ -188,6 +202,8 @@ class DryRun(QObject):
                 return f"{len(shake.popups)} sprites da agitada continuam na tela"
 
         def confere_selvagem():
+            if sprites.falhas.recente() and (not catch.wilds or catch.ball is None):
+                return f"download falhou: {sprites.falhas.motivo}"
             if not catch.wilds:
                 return "nenhum Pokémon selvagem apareceu"
             if catch.ball is None:
@@ -248,6 +264,27 @@ class DryRun(QObject):
                                            for l in catch._linhas_hud(time.monotonic())):
                 return "HUD não avisou que está procurando"
 
+        def corta_a_rede():
+            self._sessao = sprites._session
+            self._cache = cfg.CACHE_DIR
+            sprites._session = SessaoMorta()
+            cfg.CACHE_DIR = cfg.CACHE_DIR / "_sem_cache"   # nada vem do disco
+            sprites.falhas.limpar()
+            catch.silencio_ate = 0.0
+            catch.spawn.stop()
+            catch.solta_pokemon()                          # vai falhar
+
+        def confere_aviso_sem_rede():
+            linhas = catch._linhas_hud(time.monotonic())
+            registrou = sprites.falhas.recente()
+            sprites._session = self._sessao                # devolve a rede
+            cfg.CACHE_DIR = self._cache
+            sprites.falhas.limpar()
+            if not registrou:
+                return "a queda de rede não foi registrada"
+            if not any("Não consegui baixar" in linha for linha in linhas):
+                return f"HUD não avisou nada: {linhas}"
+
         def sai_com_esc():
             poke.pointer.escape_pressed.emit()
             if poke.modo != "off":
@@ -271,6 +308,8 @@ class DryRun(QObject):
             ("captura confirmada", confere_captura, 0.2),
             ("intervalo de expectativa aberto", confere_intervalo, 2.5),
             ("nada aparece durante o intervalo", confere_silencio, 0.2),
+            ("rede cai no meio da caçada", corta_a_rede, 1.5),
+            ("HUD avisa que não deu para baixar", confere_aviso_sem_rede, 0.3),
             ("Esc volta para pausado", sai_com_esc, 0.2),
         ]
 

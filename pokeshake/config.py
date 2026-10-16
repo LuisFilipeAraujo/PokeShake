@@ -58,3 +58,5 @@ CELEBRATE_S = 2.2               # duração da comemoração
 PARTICLES = 46                  # faíscas da comemoração
 
 HUD_HINT_S = 6.0                # segundos mostrando a dica do gesto
+AVISO_FALHA_S = 12.0            # por quanto tempo avisar que o download falhou
+NOMES_RETRY_S = 60.0            # recuo antes de tentar a lista de nomes de novo

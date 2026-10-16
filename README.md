@@ -84,6 +84,25 @@ PokeAPI numa única chamada, também em cache.
   ~13% de um núcleo caçando, ~2% parado.
 - **Coordenadas**: a posição vem do próprio Qt, então a escala de tela do
   Windows (125%, 150%) não desloca os sprites.
+- **Sem internet**: o app avisa em vez de ficar mudo. No modo Caçada, uma linha
+  no HUD diz o que falhou e qual sprite faltou — "o sprite" ou "a pokébola",
+  porque não ter bola na mão se parece com arremesso quebrado. No modo Agitada,
+  que não tem HUD, o aviso sai num balão da bandeja (no máximo um por 12 s),
+  mais a dica do ícone, que fica: o balão é transitório e o Windows pode
+  silenciá-lo. A tentativa se repete a cada aparição, então o jogo volta sozinho
+  quando a rede volta.
+- **Rede que mente**: wifi de hotel responde 200 com a página de login, e
+  gravar isso no cache criaria um Pokémon invisível permanente — que ainda
+  ocuparia vaga e poderia ser "capturado". Só entra no cache o que começa com
+  cabeçalho de PNG ou de GIF. Na mesma linha, só o GIF animado pode ser anotado
+  como ausente: todo ID da Pokédex tem PNG, então 404 nele é a rede mentindo, e
+  anotar mataria aquele Pokémon para sempre naquela máquina.
+- **Nomes**: nunca são buscados na thread da interface. `pokemon_name` só lê
+  memória e disco; quem faz rede é o `prefetch_names`, chamado da thread de
+  fundo que baixa o sprite, depois de entregá-lo. Buscar na hora da captura
+  congelaria o overlay pelo timeout; buscar antes de entregar atrasaria cada
+  aparição pelo mesmo tempo. Lista vazia nunca é definitiva, e uma falha recua
+  60 s antes de nova tentativa.
 
 ## Qualidade
 
@@ -110,14 +129,15 @@ roteirizada pela costura `ler_cursor` / `pressionado` em
 | [tests/test_shake.py](tests/test_shake.py) | detecção da agitada, falsos positivos, janela do sprite |
 | [tests/test_catch.py](tests/test_catch.py) | arremesso, colisão, captura, intervalo de expectativa |
 | [tests/test_render.py](tests/test_render.py) | região suja, largura dos textos, custo do quadro |
+| [tests/test_offline.py](tests/test_offline.py) | falha de download: aviso na tela, cache não envenenado, nomes sem travar |
 | [tests/test_app.py](tests/test_app.py) | menu, bandeja, troca de modos, Esc |
 | [tests/test_dryrun.py](tests/test_dryrun.py) | e2e: o app como processo separado |
 
 **O dry run** ([dryrun.py](pokeshake/dryrun.py)) sobe o aplicativo de verdade —
-mesma `main`, mesma bandeja, mesmo menu — e passeia por 14 passos: liga a
+mesma `main`, mesma bandeja, mesmo menu — e passeia por 16 passos: liga a
 Agitada, sacode o mouse, confere o sprite, troca para a Caçada, espera um
 selvagem aparecer, arremessa a pokébola num alvo plantado, confirma a captura,
-confere o intervalo e sai com Esc. O resultado vira código de saída, então
+confere o intervalo, derruba a rede para ver o aviso aparecer e sai com Esc. O resultado vira código de saída, então
 serve tanto na mão quanto dentro do pytest.
 
 **Um teste mexe no dispositivo de verdade** e por isso é opt-in: ele injeta um

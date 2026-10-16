@@ -47,7 +47,8 @@ def test_dry_run_cobre_os_dois_modos(dryrun):
     proc, _ = dryrun
     saida = proc.stdout
     for trecho in ["modo Agitada", "modo Caçada", "captura confirmada",
-                   "intervalo de expectativa", "Esc volta para pausado"]:
+                   "intervalo de expectativa", "rede cai no meio da caçada",
+                   "HUD avisa que não deu para baixar", "Esc volta para pausado"]:
         assert trecho in saida, f"o roteiro não cobriu {trecho!r}"
 
 

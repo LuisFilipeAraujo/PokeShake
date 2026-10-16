@@ -113,6 +113,7 @@ class ShakeMode(QObject):
     """Liga o detector de agitada ao download e à exibição do sprite."""
 
     sprite_ready = pyqtSignal(bytes, bool, int, int)
+    download_falhou = pyqtSignal(str)
 
     def __init__(self, pointer, parent=None):
         super().__init__(parent)
@@ -143,6 +144,10 @@ class ShakeMode(QObject):
             data, is_gif = sprites.fetch_pokemon(pid)
             if data:
                 self.sprite_ready.emit(data, is_gif, int(x), int(y))
+            else:
+                # este modo não tem HUD: sacudir e não ver nada parece defeito
+                self.download_falhou.emit(sprites.falhas.motivo
+                                          or "sprite indisponível")
         threading.Thread(target=worker, daemon=True).start()
 
     def summon_at_cursor(self):
