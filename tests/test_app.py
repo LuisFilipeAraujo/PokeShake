@@ -1,18 +1,7 @@
 """Bandeja, menu overlay e a troca de modos."""
-import pytest
 from PyQt6.QtWidgets import QApplication
 
-from pokeshake.app import PokeShake
 from pokeshake.menu import MODOS, OverlayMenu, pokeball_icon
-
-
-@pytest.fixture
-def poke(app, entrada):
-    p = PokeShake(app)
-    yield p
-    p.cleanup()
-    p.menu.close()
-    p.tray.hide()
 
 
 def test_sobe_pausado(poke):
@@ -23,7 +12,8 @@ def test_sobe_pausado(poke):
 
 def test_bandeja_lista_os_modos(poke):
     itens = [a.text() for a in poke.tray.contextMenu().actions() if a.text()]
-    assert itens == ["Modo Agitada", "Modo Caçada", "Pausado", "Abrir menu", "Sair"]
+    assert itens == ["Modo Agitada", "Modo Caçada", "Pausado",
+                     "Abrir menu", "Pokédex", "Sair"]
 
 
 def test_menu_tem_os_tres_modos(poke, processa):

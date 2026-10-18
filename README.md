@@ -44,6 +44,20 @@ Acertou, capturou: o Pokémon é sugado para dentro da bola, ela balança três
 vezes e a captura é confirmada com faíscas e o nome dele na tela. `Esc` sai do
 modo.
 
+### Pokédex
+
+Cada captura é gravada em `~/.poke_shake_cache/pokedex.json`, então o progresso
+sobrevive ao fechamento — o HUD mostra `Capturados: 3 · Pokédex: 47/1025`, e
+espécie nova ganha banner próprio ("é novo na Pokédex!"). O botão **Pokédex** no
+menu (ou no ícone da bandeja) abre a lista do que você já pegou, com as
+miniaturas, o nome, quantas vezes e a data da primeira captura.
+
+A tela monta as miniaturas só a partir do cache de sprites, sem baixar nada:
+abrir com dezenas de Pokémon travaria a interface. A gravação é por arquivo
+temporário trocado no lugar, para uma queda no meio da escrita não truncar o
+progresso, e um arquivo ilegível é preservado como `.quebrado` em vez de
+apagado.
+
 Depois de cada captura a mata fica quieta por 6 a 12 segundos, para a próxima
 aparição valer expectativa em vez de virar fila. Nada aparece durante a
 animação da captura, e o HUD avisa que está procurando o próximo. A faixa está
@@ -66,12 +80,14 @@ gesto, mude `THROW_GESTURE` em [pokeshake/config.py](pokeshake/config.py) para
 | [pokeshake/pointer.py](pokeshake/pointer.py) | leitura do cursor e do gesto, sem hooks |
 | [pokeshake/shake.py](pokeshake/shake.py) | modo Agitada |
 | [pokeshake/catch.py](pokeshake/catch.py) | modo Caçada: física, colisão e captura |
-| [pokeshake/menu.py](pokeshake/menu.py) | menu overlay e ícone da bandeja |
+| [pokeshake/pokedex.py](pokeshake/pokedex.py) | registro das capturas em disco |
+| [pokeshake/menu.py](pokeshake/menu.py) | menu overlay, tela da Pokédex e ícone da bandeja |
 | [pokeshake/app.py](pokeshake/app.py) | bandeja e troca de modos |
 
 Os sprites ficam em `~/.poke_shake_cache`, então cada Pokémon só é baixado uma
 vez; IDs sem GIF animado são anotados para não repetir o 404. Os nomes vêm da
-PokeAPI numa única chamada, também em cache.
+PokeAPI numa única chamada, também em cache. A Pokédex fica no mesmo lugar, em
+`pokedex.json`.
 
 ## Detalhes de implementação
 
@@ -130,14 +146,17 @@ roteirizada pela costura `ler_cursor` / `pressionado` em
 | [tests/test_catch.py](tests/test_catch.py) | arremesso, colisão, captura, intervalo de expectativa |
 | [tests/test_render.py](tests/test_render.py) | região suja, largura dos textos, custo do quadro |
 | [tests/test_offline.py](tests/test_offline.py) | falha de download: aviso na tela, cache não envenenado, nomes sem travar |
+| [tests/test_pokedex.py](tests/test_pokedex.py) | registro, arquivo estragado, integração com a captura, tela |
 | [tests/test_app.py](tests/test_app.py) | menu, bandeja, troca de modos, Esc |
 | [tests/test_dryrun.py](tests/test_dryrun.py) | e2e: o app como processo separado |
 
 **O dry run** ([dryrun.py](pokeshake/dryrun.py)) sobe o aplicativo de verdade —
-mesma `main`, mesma bandeja, mesmo menu — e passeia por 16 passos: liga a
+mesma `main`, mesma bandeja, mesmo menu — e passeia por 18 passos: liga a
 Agitada, sacode o mouse, confere o sprite, troca para a Caçada, espera um
 selvagem aparecer, arremessa a pokébola num alvo plantado, confirma a captura,
-confere o intervalo, derruba a rede para ver o aviso aparecer e sai com Esc. O resultado vira código de saída, então
+vê se ela entrou na Pokédex e aparece na tela dela, confere o intervalo, derruba
+a rede para ver o aviso aparecer e sai com Esc. A Pokédex do dry run é um
+arquivo descartável: um teste não pode inflar o progresso de verdade. O resultado vira código de saída, então
 serve tanto na mão quanto dentro do pytest.
 
 **Um teste mexe no dispositivo de verdade** e por isso é opt-in: ele injeta um

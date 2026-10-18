@@ -9,8 +9,9 @@ from PyQt6.QtWidgets import QApplication, QMenu, QSystemTrayIcon
 
 from . import config as cfg
 from .catch import CatchMode
-from .menu import MODOS, OverlayMenu, pokeball_icon
+from .menu import MODOS, OverlayMenu, PokedexPanel, pokeball_icon
 from .pointer import Pointer
+from .pokedex import Pokedex
 from .shake import ShakeMode
 
 
@@ -21,14 +22,18 @@ class PokeShake(QObject):
         super().__init__(parent)
         self.app = app
         self.pointer = Pointer(self)
+        self.pokedex = Pokedex()
         self.shake = ShakeMode(self.pointer, self)
-        self.catch = CatchMode(self.pointer, self)
+        self.catch = CatchMode(self.pointer, self.pokedex, self)
         self.modo = "off"
         self._ultimo_aviso = 0.0
 
         self.menu = OverlayMenu()
+        self.menu.marcar_pokedex(self.pokedex.especies)
         self.menu.modo_escolhido.connect(self.set_modo)
+        self.menu.abrir_pokedex.connect(self._mostrar_pokedex)
         self.menu.sair.connect(app.quit)
+        self.pokedex_panel = PokedexPanel(self.pokedex)
         self.pointer.escape_pressed.connect(lambda: self.set_modo("off"))
         self.catch.captured.connect(self._capturou)
         self.shake.download_falhou.connect(self._download_falhou)
@@ -51,6 +56,9 @@ class PokeShake(QObject):
         abrir = QAction("Abrir menu", menu)
         abrir.triggered.connect(self.menu.aparecer)
         menu.addAction(abrir)
+        pokedex = QAction("Pokédex", menu)
+        pokedex.triggered.connect(self._mostrar_pokedex)
+        menu.addAction(pokedex)
         sair = QAction("Sair", menu)
         sair.triggered.connect(self.app.quit)
         menu.addAction(sair)
@@ -85,9 +93,15 @@ class PokeShake(QObject):
         nome = next(n for c, n, _ in MODOS if c == modo)
         self.tray.setToolTip(f"PokeShake — {nome}")
 
+    def _mostrar_pokedex(self):
+        self.pokedex_panel.aparecer()
+
     def _capturou(self, nome):
+        self.menu.marcar_pokedex(self.pokedex.especies)
+        if self.pokedex_panel.isVisible():
+            self.pokedex_panel.atualizar()
         self.tray.setToolTip(f"PokeShake — {nome} capturado! "
-                             f"({self.catch.capturados} no total)")
+                             f"(Pokédex: {self.pokedex.especies}/{cfg.MAX_ID})")
 
     def _download_falhou(self, motivo):
         """O modo Agitada não tem onde escrever na tela, então o aviso vai para
@@ -108,6 +122,7 @@ class PokeShake(QObject):
         self.shake.stop()
         self.catch.stop()
         self.menu.hide()
+        self.pokedex_panel.hide()
 
 
 def modo_pedido(argv) -> str:

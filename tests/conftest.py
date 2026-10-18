@@ -13,13 +13,15 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from PyQt6.QtCore import QPointF                    # noqa: E402
 from PyQt6.QtWidgets import QApplication            # noqa: E402
 
 from pokeshake import config as cfg                 # noqa: E402
 from pokeshake import sprites                       # noqa: E402
-from pokeshake.catch import CatchMode               # noqa: E402
+from pokeshake.catch import CatchMode, Wild         # noqa: E402
 from pokeshake.dryrun import EntradaVirtual         # noqa: E402
 from pokeshake.pointer import Pointer               # noqa: E402
+from pokeshake.pokedex import Pokedex                # noqa: E402
 
 
 @pytest.fixture(scope="session")
@@ -69,9 +71,15 @@ def pointer(app, entrada):
 
 
 @pytest.fixture
-def catch(app, pointer):
+def pokedex(tmp_path):
+    """Pokédex isolada: nenhum teste pode mexer no progresso real do usuário."""
+    return Pokedex(caminho=tmp_path / "pokedex.json")
+
+
+@pytest.fixture
+def catch(app, pointer, pokedex):
     """Modo caçada ligado, mas sem aparições sorteadas: cada teste monta a cena."""
-    modo = CatchMode(pointer)
+    modo = CatchMode(pointer, pokedex)
     # o start() solta um Pokémon sorteado; o download chega depois e cairia no
     # meio da cena de outro teste, então a aparição inicial é neutralizada
     modo.solta_pokemon = lambda: None
@@ -126,3 +134,37 @@ def pokebola():
     if not data:
         pytest.skip("sem rede e sem cache para baixar a pokébola")
     return data
+
+
+@pytest.fixture
+def poke(app, entrada, tmp_path, monkeypatch):
+    """App inteiro, com a Pokédex em arquivo descartável."""
+    from pokeshake import app as modulo_app
+    monkeypatch.setattr(modulo_app, "Pokedex",
+                        lambda: Pokedex(caminho=tmp_path / "pokedex.json"))
+    instancia = modulo_app.PokeShake(app)
+    yield instancia
+    instancia.cleanup()
+    instancia.pokedex_panel.close()
+    instancia.menu.close()
+    instancia.tray.hide()
+
+
+@pytest.fixture
+def arremesso_certeiro(pointer, pikachu, pokebola, simula):
+    """Planta um alvo, põe a bola na mão e acerta: captura garantida."""
+    def _arremesso(modo, pid=25):
+        data, is_gif = pikachu
+        alvo = Wild(pid, sprites.Sprite(data, is_gif, target_h=cfg.WILD_HEIGHT),
+                    QPointF(900, 400))
+        modo.wilds.append(alvo)
+        modo.ball = None
+        modo._nasce_bola("poke-ball", pokebola)
+        modo.ball.pos = QPointF(300, 400)
+        modo.ball.escala = 1.0
+        modo.carregando = True
+        modo.pressionado_em = modo._cursor()
+        pointer.velocity = lambda: (1400.0, -60.0)
+        modo._soltou(None)
+        return simula(modo, 6.0, ate=lambda: modo.capturados > 0)
+    return _arremesso

@@ -15,6 +15,7 @@ from PyQt6.QtWidgets import QApplication, QWidget
 
 from . import config as cfg
 from . import sprites
+from .pokedex import Pokedex
 
 BRANCO = QColor(255, 255, 255)
 FAISCA = [QColor(255, 226, 120), QColor(255, 255, 255), QColor(255, 176, 60),
@@ -133,9 +134,10 @@ class CatchMode(QObject):
     ball_ready = pyqtSignal(str, bytes)
     captured = pyqtSignal(str)
 
-    def __init__(self, pointer, parent=None):
+    def __init__(self, pointer, pokedex=None, parent=None):
         super().__init__(parent)
         self.pointer = pointer
+        self.pokedex = pokedex if pokedex is not None else Pokedex()
         self.canvas = None
         self.wilds = []
         self.voando = []
@@ -481,7 +483,9 @@ class CatchMode(QObject):
         bola.vai_para("sugando", agora)
 
     def _captura(self, bola, agora):
-        nome = sprites.pokemon_name(bola.alvo.pid)
+        pid = bola.alvo.pid
+        nome = sprites.pokemon_name(pid)
+        novo = self.pokedex.registrar(pid, nome)
         self.capturados += 1
         self.silencio_ate = agora + random.uniform(cfg.PAUSE_MIN, cfg.PAUSE_MAX)
         self._reagenda_spawn()
@@ -494,8 +498,10 @@ class CatchMode(QObject):
                 "pos": QPointF(bola.pos), "vida": random.uniform(0.5, 1.1),
                 "vel": QPointF(math.cos(ang) * v, math.sin(ang) * v - 160),
                 "cor": random.choice(FAISCA), "r": random.uniform(2.5, 5.5)})
-        self.banners.append({"texto": f"Gotcha! {nome} foi capturado!",
-                             "pos": QPointF(bola.pos), "nascido": agora})
+        texto = (f"Gotcha! {nome} é novo na Pokédex!" if novo
+                 else f"Gotcha! {nome} foi capturado!")
+        self.banners.append({"texto": texto, "pos": QPointF(bola.pos),
+                             "nascido": agora})
         self.captured.emit(nome)
 
     # ---------------- desenho ----------------
@@ -559,7 +565,8 @@ class CatchMode(QObject):
         p.drawText(caixa, Qt.AlignmentFlag.AlignCenter, texto)
 
     def _linhas_hud(self, agora):
-        linhas = [f"Capturados: {self.capturados}"]
+        linhas = [f"Capturados: {self.capturados}  ·  "
+                  f"Pokédex: {self.pokedex.especies}/{cfg.MAX_ID}"]
         if sprites.falhas.recente():
             # sem este aviso o modo fica mudo: nada aparece na tela e nada
             # explica o motivo, então parece que o programa travou

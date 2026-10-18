@@ -115,6 +115,28 @@ def random_ball() -> str:
     return random.choice(cfg.BALLS)
 
 
+def miniatura(pid: int, lado: int = 64):
+    """Miniatura do sprite já em cache, ou None.
+
+    Não toca na rede de propósito: a tela da Pokédex abre com dezenas de
+    sprites de uma vez, e baixar ali travaria a interface. Quem foi capturado
+    já passou pelo cache.
+    """
+    for ext in ("png", "gif"):
+        caminho = cfg.CACHE_DIR / f"{pid}.{ext}"
+        if not caminho.exists():
+            continue
+        pix = QPixmap()
+        try:
+            pix.loadFromData(caminho.read_bytes())
+        except OSError:
+            continue
+        if not pix.isNull():
+            return pix.scaled(lado, lado, Qt.AspectRatioMode.KeepAspectRatio,
+                              Qt.TransformationMode.SmoothTransformation)
+    return None
+
+
 def pokemon_name(pid: int) -> str:
     """Nome do Pokémon, sem tocar na rede.
 

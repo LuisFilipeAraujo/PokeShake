@@ -407,11 +407,11 @@ def test_dica_do_gesto_espera_a_primeira_bola(catch, pokebola):
     assert any(cfg.GESTO_NOME in linha for linha in linhas)
 
 
-def test_start_pede_uma_bola_so(app, pointer, monkeypatch):
+def test_start_pede_uma_bola_so(app, pointer, pokedex, monkeypatch):
     """start() e o primeiro quadro pediam a bola junto: dois downloads, um no
     lixo — e, sem rede, duas threads em timeout de uma vez."""
     from pokeshake.catch import CatchMode
-    modo = CatchMode(pointer)
+    modo = CatchMode(pointer, pokedex)
     pedidos = []
     monkeypatch.setattr(modo, "pede_bola", lambda: pedidos.append(1))
     monkeypatch.setattr(modo, "solta_pokemon", lambda: None)

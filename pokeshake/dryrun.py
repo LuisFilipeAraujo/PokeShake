@@ -16,6 +16,7 @@ from . import config as cfg
 from . import pointer as ptr
 from . import sprites
 from .catch import Wild
+from .pokedex import Pokedex
 from PyQt6.QtCore import QPointF
 
 
@@ -71,6 +72,11 @@ class DryRun(QObject):
     # ---------------- infraestrutura ----------------
     def start(self):
         self.entrada.instalar()
+        # Pokédex descartável: um teste não pode inflar o progresso de verdade
+        self.pokedex = Pokedex(cfg.CACHE_DIR / "pokedex-dryrun.json")
+        self.poke.pokedex = self.pokedex
+        self.poke.catch.pokedex = self.pokedex
+        self.poke.pokedex_panel.pokedex = self.pokedex
         tela = self.app.primaryScreen().geometry()
         self.centro = tela.center()
         self.entrada.mover(self.centro.x() - 400, self.centro.y())
@@ -106,6 +112,10 @@ class DryRun(QObject):
         if falhas:
             print("falhou em: " + ", ".join(falhas))
         self.entrada.restaurar()
+        try:
+            self.pokedex.caminho.unlink()
+        except OSError:
+            pass
         self.app.quit()
 
     # ---------------- ajudantes ----------------
@@ -246,6 +256,25 @@ class DryRun(QObject):
             if self.alvo in catch.wilds:
                 return "Pokémon capturado continua na tela"
 
+        def confere_pokedex():
+            if not self.pokedex.tem(25):
+                return "Pikachu não entrou na Pokédex"
+            if self.pokedex.especies != 1:
+                return f"{self.pokedex.especies} espécies na Pokédex, esperava 1"
+            if not self.pokedex.caminho.exists():
+                return "a captura não foi gravada em disco"
+
+        def confere_tela_pokedex():
+            painel = poke.pokedex_panel
+            painel.aparecer()
+            cartoes = painel.grade.count()
+            resumo = painel.resumo.text()
+            painel.hide()
+            if cartoes < 1:
+                return "a tela da Pokédex abriu vazia"
+            if not resumo.startswith("1 de"):
+                return f"resumo da Pokédex diz {resumo!r}"
+
         def confere_intervalo():
             falta = catch.silencio_ate - time.monotonic()
             if falta <= 0:
@@ -306,6 +335,8 @@ class DryRun(QObject):
             ("arremesso com o gesto", arremessa, 0.8),
             ("pokébola voando na direção certa", confere_voo, 5.0),
             ("captura confirmada", confere_captura, 0.2),
+            ("captura entra na Pokédex", confere_pokedex, 0.3),
+            ("tela da Pokédex lista o capturado", confere_tela_pokedex, 0.4),
             ("intervalo de expectativa aberto", confere_intervalo, 2.5),
             ("nada aparece durante o intervalo", confere_silencio, 0.2),
             ("rede cai no meio da caçada", corta_a_rede, 1.5),
