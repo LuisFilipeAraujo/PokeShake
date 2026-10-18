@@ -1,0 +1,63 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  testes:
+    name: Testes (Python ${{ matrix.python }})
+    runs-on: windows-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.12", "3.14"]
+
+    env:
+      # o runner não tem desktop utilizável como o de uma máquina de verdade;
+      # a plataforma offscreen é determinística e a suíte foi conferida nela
+      QT_QPA_PLATFORM: offscreen
+      # a saída do app tem acentos e vai por pipe para o log
+      PYTHONIOENCODING: utf-8
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+
+      - name: Instalar dependências
+        run: pip install -r requirements-dev.txt
+
+      # os testes baixam sprites de verdade; o cache deixa a execução rápida e
+      # tira a rede do caminho crítico. Sem ele a suíte ainda passa: o que não
+      # baixa vira teste pulado, não falha.
+      - name: Cache dos sprites e dos gritos
+        uses: actions/cache@v4
+        with:
+          path: ~/.poke_shake_cache
+          key: poke-cache-${{ runner.os }}-${{ github.run_id }}
+          restore-keys: poke-cache-${{ runner.os }}-
+
+      - name: Restos e imports mortos
+        run: python -m pyflakes pokeshake tests
+
+      # "slow" fica de fora: são o custo de quadro e a reprodução de áudio, que
+      # dependem de hardware e não dizem nada num runner compartilhado
+      - name: Suíte de testes
+        run: python -m pytest -m "not slow" -q
+
+      # o mesmo roteiro que roda na suíte, aqui de novo porque o relatório dele
+      # é o artefato mais legível quando algo quebra
+      - name: Dry run ponta a ponta
+        run: python pokeshake_init.py --dry-run

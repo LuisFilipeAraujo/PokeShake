@@ -158,17 +158,13 @@ def test_hud_mostra_o_progresso(catch):
     assert f"Pokédex: 2/{cfg.MAX_ID}" in catch._linhas_hud(time.monotonic())[0]
 
 
-def test_progresso_cabe_na_area_reservada_do_hud(app, catch):
-    from PyQt6.QtGui import QFont, QPainter, QPixmap
+def test_regiao_suja_cobre_o_progresso(catch):
+    """Pokédex cheia deixa a primeira linha mais longa; a região acompanha."""
     for pid in range(1, 40):
         catch.pokedex.registrar(pid, "Pokémon Com Nome Comprido")
-    pix = QPixmap(10, 10)
-    p = QPainter(pix)
-    p.setFont(QFont("Segoe UI", 12, QFont.Weight.DemiBold))
-    larguras = [p.fontMetrics().horizontalAdvance(linha) + 28
-                for linha in catch._linhas_hud(time.monotonic())]
-    p.end()
-    assert max(larguras) <= 1000
+    area = catch._area_hud()
+    for texto, caixa in catch.caixas_hud(time.monotonic()):
+        assert area.contains(caixa.toRect()), f"{texto!r} fica fora da região"
 
 
 # ---------------- a tela ----------------

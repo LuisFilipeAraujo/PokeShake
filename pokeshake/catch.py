@@ -10,7 +10,8 @@ import threading
 import time
 
 from PyQt6.QtCore import Qt, QObject, QPointF, QRect, QRectF, QTimer, pyqtSignal
-from PyQt6.QtGui import QColor, QFont, QPainter, QPen, QPixmap, QRegion
+from PyQt6.QtGui import (QColor, QFont, QFontMetrics, QPainter, QPen, QPixmap,
+                         QRegion)
 from PyQt6.QtWidgets import QApplication, QWidget
 
 from . import config as cfg
@@ -156,6 +157,13 @@ class CatchMode(QObject):
         self.ativo = False
         self._ultimo = time.monotonic()
         self._sujo = QRegion()
+        # a largura do texto depende da fonte e do DPI da máquina; medir aqui e
+        # usar a mesma medida para desenhar e para marcar a região suja evita
+        # caixa fixa cortando texto em quem tem outra fonte ou outra escala
+        self.fonte_hud = QFont("Segoe UI", 12, QFont.Weight.DemiBold)
+        self.fonte_banner = QFont("Segoe UI", 20, QFont.Weight.Bold)
+        self.metrica_hud = QFontMetrics(self.fonte_hud)
+        self.metrica_banner = QFontMetrics(self.fonte_banner)
 
         self.pokemon_ready.connect(self._nasce_pokemon)
         self.ball_ready.connect(self._nasce_bola)
@@ -374,8 +382,10 @@ class CatchMode(QObject):
             regiao = regiao.united(QRect(int(parte["pos"].x()) - r,
                                          int(parte["pos"].y()) - r, r * 2, r * 2))
         for b in self.banners:
-            regiao = regiao.united(QRect(int(b["pos"].x()) - 500,
-                                         int(b["pos"].y()) - 140, 1000, 160))
+            largura = self.largura_banner(b["texto"]) + 16
+            regiao = regiao.united(QRect(int(b["pos"].x() - largura / 2),
+                                         int(b["pos"].y()) - 140,
+                                         int(largura), 160))
         return regiao.united(self._area_hud())
 
     @staticmethod
@@ -385,14 +395,32 @@ class CatchMode(QObject):
         return QRect(int(bola.pos.x() - raio), int(bola.pos.y() - raio),
                      int(raio * 2), int(raio * 2))
 
-    def _area_hud(self) -> QRect:
+    def largura_banner(self, texto) -> int:
+        return self.metrica_banner.horizontalAdvance(texto) + 36
+
+    def caixas_hud(self, agora):
+        """Caixa de cada linha do HUD, como (texto, retângulo).
+
+        Mesma conta para desenhar e para marcar a região suja: com duas contas
+        separadas, uma caixa fixa acabava cortando texto em quem tem outra fonte
+        ou outra escala de tela.
+        """
         tela = QApplication.primaryScreen().geometry()
         origem = self.canvas.geometry().topLeft()
-        # a altura acompanha as linhas de agora: uma linha fora da região suja
-        # apareceria cortada, ou só quando outra coisa sujasse aquele pedaço
-        linhas = len(self._linhas_hud(time.monotonic()))
-        return QRect(tela.center().x() - origem.x() - 500,
-                     tela.top() - origem.y() + 16, 1000, 24 + 38 * linhas)
+        cx = tela.center().x() - origem.x()
+        topo = tela.top() - origem.y() + 24
+        caixas = []
+        for i, linha in enumerate(self._linhas_hud(agora)):
+            largura = self.metrica_hud.horizontalAdvance(linha) + 28
+            caixas.append((linha, QRectF(cx - largura / 2, topo + i * 38,
+                                         largura, 32)))
+        return caixas
+
+    def _area_hud(self) -> QRect:
+        area = None
+        for _, caixa in self.caixas_hud(time.monotonic()):
+            area = caixa if area is None else area.united(caixa)
+        return area.adjusted(-8, -8, 8, 8).toRect()
 
     def _step_bola_na_mao(self, agora, dt):
         bola = self.ball
@@ -557,9 +585,9 @@ class CatchMode(QObject):
     def _banner(self, p: QPainter, b, agora):
         t = (agora - b["nascido"]) / cfg.CELEBRATE_S
         alpha = int(255 * max(0.0, min(1.0, (1 - t) * 2.2)))
-        p.setFont(QFont("Segoe UI", 20, QFont.Weight.Bold))
+        p.setFont(self.fonte_banner)
         texto = b["texto"]
-        largura = p.fontMetrics().horizontalAdvance(texto) + 36
+        largura = self.largura_banner(texto)
         caixa = QRectF(b["pos"].x() - largura / 2,
                        b["pos"].y() - 70 - t * 50, largura, 46)
         p.setPen(Qt.PenStyle.NoPen)
@@ -586,16 +614,8 @@ class CatchMode(QObject):
         return linhas
 
     def _hud(self, p: QPainter, agora):
-        tela = QApplication.primaryScreen().geometry()
-        origem = self.canvas.geometry().topLeft()
-        cx = tela.center().x() - origem.x()
-        topo = tela.top() - origem.y() + 24
-
-        linhas = self._linhas_hud(agora)
-        p.setFont(QFont("Segoe UI", 12, QFont.Weight.DemiBold))
-        for i, linha in enumerate(linhas):
-            largura = p.fontMetrics().horizontalAdvance(linha) + 28
-            caixa = QRectF(cx - largura / 2, topo + i * 38, largura, 32)
+        p.setFont(self.fonte_hud)
+        for linha, caixa in self.caixas_hud(agora):
             p.setPen(Qt.PenStyle.NoPen)
             p.setBrush(QColor(20, 22, 30, 190))
             p.drawRoundedRect(caixa, 16, 16)

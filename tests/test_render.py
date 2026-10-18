@@ -7,8 +7,8 @@ anterior na tela do usuário — daí estes testes.
 import time
 
 import pytest
-from PyQt6.QtCore import QPointF, QRect
-from PyQt6.QtGui import QColor, QFont, QPainter, QPixmap
+from PyQt6.QtCore import QPointF, QRect, QRectF
+from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import QApplication
 
 from pokeshake import config as cfg
@@ -73,26 +73,27 @@ def test_uniao_com_o_quadro_anterior_apaga_o_rastro(catch, pikachu, pokebola):
     assert depois.united(antes).contains(antiga), "a união precisa apagar o rastro"
 
 
-def test_banner_cabe_na_area_reservada(app, pikachu):
-    """O nome mais comprido da Pokédex não pode estourar a caixa marcada suja."""
-    pix = QPixmap(10, 10)
-    p = QPainter(pix)
-    p.setFont(QFont("Segoe UI", 20, QFont.Weight.Bold))
+def test_regiao_cobre_o_banner_mais_comprido(catch):
+    """A largura do texto depende da fonte e do DPI da máquina, então a região
+    tem que seguir a medida, não um valor fixo."""
     nomes = [sprites.pokemon_name(i) for i in (25, 6, 386, 487, 800, 1017)]
-    maior = max(nomes, key=len)
-    largura = p.fontMetrics().horizontalAdvance(f"Gotcha! {maior} foi capturado!") + 36
-    p.end()
-    assert largura <= 1000, f"{maior!r} gera um banner de {largura}px"
+    texto = f"Gotcha! {max(nomes, key=len)} é novo na Pokédex!"
+    catch.banners.append({"texto": texto, "pos": QPointF(900, 700),
+                          "nascido": time.monotonic()})
+    largura = catch.largura_banner(texto)
+    # o banner sobe enquanto desaparece: a faixa varrida vai de -120 a -24
+    varrido = QRectF(900 - largura / 2, 700 - 120, largura, 96).toRect()
+    assert catch._regiao_suja().contains(varrido), f"{texto!r} tem {largura}px"
 
 
-def test_dica_do_hud_cabe_na_area_reservada(app, catch):
-    pix = QPixmap(10, 10)
-    p = QPainter(pix)
-    p.setFont(QFont("Segoe UI", 12, QFont.Weight.DemiBold))
-    linhas = catch._linhas_hud(catch.iniciado + 1)
-    larguras = [p.fontMetrics().horizontalAdvance(linha) + 28 for linha in linhas]
-    p.end()
-    assert max(larguras) <= 1000
+def test_area_do_hud_cobre_todas_as_caixas(catch):
+    """Vale para qualquer número de linhas e qualquer fonte: a área suja é a
+    união das caixas que o desenho usa."""
+    area = catch._area_hud()
+    caixas = catch.caixas_hud(time.monotonic())
+    assert caixas
+    for texto, caixa in caixas:
+        assert area.contains(caixa.toRect()), f"{texto!r} fica fora da região"
 
 
 def test_canvas_cobre_todos_os_monitores(catch):
@@ -131,18 +132,14 @@ def test_custo_de_um_quadro(catch, pikachu, pokebola, processa):
     assert mediana < 8, f"paint em {mediana:.1f}ms por quadro"
 
 
-def test_regiao_do_hud_cobre_a_ultima_linha(catch):
-    """A terceira linha caía 26px fora da faixa marcada como suja: apareceria
-    cortada, ou só quando outra coisa sujasse aquele pedaço da tela."""
+def test_regiao_cobre_a_segunda_linha_do_hud(catch):
+    """A segunda linha caía fora da faixa fixa: apareceria cortada, ou só
+    quando outra coisa sujasse aquele pedaço da tela."""
     sprites.falhas.registrar("sem conexão")
     try:
-        linhas = catch._linhas_hud(time.monotonic())
-        assert len(linhas) >= 2
         area = catch._area_hud()
-        tela = QApplication.primaryScreen().geometry()
-        origem = catch.canvas.geometry().topLeft()
-        topo = tela.top() - origem.y() + 24          # mesma conta do _hud
-        base_da_ultima = topo + (len(linhas) - 1) * 38 + 32
-        assert base_da_ultima <= area.bottom()
+        caixas = catch.caixas_hud(time.monotonic())
+        assert len(caixas) == 2
+        assert area.contains(caixas[-1][1].toRect())
     finally:
         sprites.falhas.limpar()

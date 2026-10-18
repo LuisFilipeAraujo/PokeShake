@@ -8,7 +8,6 @@ import time
 
 import pytest
 import requests
-from PyQt6.QtGui import QFont, QPainter, QPixmap
 
 from pokeshake import config as cfg
 from pokeshake import sprites
@@ -253,18 +252,15 @@ def test_aviso_sai_do_hud_quando_a_rede_volta(catch):
     assert not any("Não consegui baixar" in linha for linha in linhas)
 
 
-def test_aviso_cabe_na_area_reservada_do_hud(app, catch):
-    """O HUD marca uma faixa fixa de 1000px como suja; texto mais largo que
-    isso deixaria rastro na tela."""
+def test_regiao_suja_cobre_o_aviso(catch):
+    """Aviso mais largo que a região marcada deixaria rastro na tela."""
     sprites.falhas.registrar("a PokeAPI respondeu 503")
     try:
-        pix = QPixmap(10, 10)
-        p = QPainter(pix)
-        p.setFont(QFont("Segoe UI", 12, QFont.Weight.DemiBold))
-        larguras = [p.fontMetrics().horizontalAdvance(linha) + 28
-                    for linha in catch._linhas_hud(time.monotonic())]
-        p.end()
-        assert max(larguras) <= 1000
+        area = catch._area_hud()
+        caixas = catch.caixas_hud(time.monotonic())
+        assert len(caixas) == 2
+        for texto, caixa in caixas:
+            assert area.contains(caixa.toRect()), f"{texto!r} fica fora"
     finally:
         sprites.falhas.limpar()
 
@@ -306,6 +302,8 @@ def test_bandeja_avisa_uma_vez_por_janela(app, entrada, monkeypatch):
     from pokeshake.app import PokeShake
     poke = PokeShake(app)
     mensagens = []
+    # o suporte a balão depende do sistema; o que se testa aqui é o limitador
+    monkeypatch.setattr(poke.tray, "supportsMessages", lambda: True)
     monkeypatch.setattr(poke.tray, "showMessage",
                         lambda *a, **k: mensagens.append(a[1]))
     try:

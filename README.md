@@ -1,5 +1,7 @@
 # PokeShake
 
+[![CI](https://github.com/LuisFilipeAraujo/PokeShake/actions/workflows/ci.yml/badge.svg)](https://github.com/LuisFilipeAraujo/PokeShake/actions/workflows/ci.yml)
+
 Pokémon da [PokeAPI](https://github.com/PokeAPI/sprites) aparecem por cima da
 sua área de trabalho. Dois modos de jogo, escolhidos num menu overlay.
 
@@ -183,6 +185,27 @@ ser consumido pelo app e não vazar para o que estiver aberto.
 ```bash
 POKESHAKE_TEST_INPUT=1 pytest tests/test_pointer.py
 ```
+
+### No GitHub Actions
+
+[ci.yml](.github/workflows/ci.yml) roda em `windows-latest`, em Python 3.12 e
+3.14: pyflakes, a suíte e o dry run. Três decisões que fazem a diferença entre
+um CI útil e um CI que vive vermelho:
+
+- **`QT_QPA_PLATFORM=offscreen`**: o runner não tem desktop como o de uma
+  máquina de verdade. A suíte inteira foi conferida nessa plataforma, inclusive
+  o dry run — que ali cai no caminho "sem área de notificação", o mesmo de quem
+  desliga os ícones da bandeja.
+- **`-m "not slow"`**: o custo de quadro e a reprodução de áudio dependem de
+  hardware e não dizem nada num runner compartilhado. Rode esses dois na sua
+  máquina.
+- **Cache de `~/.poke_shake_cache`**: os testes baixam sprites de verdade. Com
+  cache a execução é rápida e a rede sai do caminho crítico; sem cache a suíte
+  ainda passa, porque o que não baixa vira teste pulado e não falha.
+
+Nenhum teste depende de fonte, DPI ou resolução: a região suja do HUD é medida
+a partir do texto, e as asserções conferem que ela cobre as caixas desenhadas —
+não uma largura fixa em pixels.
 
 ## Ajustes
 

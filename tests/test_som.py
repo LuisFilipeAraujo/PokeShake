@@ -174,8 +174,16 @@ def test_volume_zero_comeca_mudo(app):
 
 # ---------------- o player de verdade, em silêncio ----------------
 
+@pytest.fixture
+def audio_disponivel(app):
+    from PyQt6.QtMultimedia import QMediaDevices
+    if QMediaDevices.defaultAudioOutput().isNull():
+        pytest.skip("máquina sem saída de áudio")
+
+
 @pytest.mark.slow
-def test_player_toca_o_arquivo_ate_o_fim(app, grito_pikachu, processa):
+def test_player_toca_o_arquivo_ate_o_fim(app, audio_disponivel, grito_pikachu,
+                                         processa):
     """Volume zero ainda exercita decodificação e saída de áudio."""
     gritos = Gritos(volume=0.0, ligado=True)
     gritos.tocar(25)
