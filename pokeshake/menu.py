@@ -76,6 +76,7 @@ class OverlayMenu(QWidget):
 
     modo_escolhido = pyqtSignal(str)
     abrir_pokedex = pyqtSignal()
+    alternar_som = pyqtSignal()
     sair = pyqtSignal()
 
     def __init__(self, parent=None):
@@ -134,6 +135,12 @@ class OverlayMenu(QWidget):
         self.botao_pokedex.clicked.connect(self.abrir_pokedex.emit)
         col.addWidget(self.botao_pokedex)
 
+        self.botao_som = QPushButton("Som")
+        self.botao_som.setProperty("modo", "true")
+        self.botao_som.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.botao_som.clicked.connect(self.alternar_som.emit)
+        col.addWidget(self.botao_som)
+
         rodape = QHBoxLayout()
         rodape.addStretch(1)
         sair = QPushButton("Sair do PokeShake")
@@ -155,6 +162,14 @@ class OverlayMenu(QWidget):
 
     def marcar_pokedex(self, especies: int):
         self.botao_pokedex.setText(f"Pokédex  ·  {especies}/{cfg.MAX_ID}")
+
+    def marcar_som(self, ligado: bool):
+        """O grito toca por cima de tudo: desligar precisa estar à mão."""
+        self.botao_som.setText("Som do grito  ·  ligado" if ligado
+                               else "Som do grito  ·  desligado")
+        self.botao_som.setProperty("ativo", "true" if ligado else "false")
+        self.botao_som.style().unpolish(self.botao_som)
+        self.botao_som.style().polish(self.botao_som)
 
     def marcar(self, modo):
         """Destaca o modo ativo e mostra a dica correspondente."""

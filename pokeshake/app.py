@@ -13,6 +13,7 @@ from .menu import MODOS, OverlayMenu, PokedexPanel, pokeball_icon
 from .pointer import Pointer
 from .pokedex import Pokedex
 from .shake import ShakeMode
+from .som import Gritos
 
 
 class PokeShake(QObject):
@@ -23,8 +24,9 @@ class PokeShake(QObject):
         self.app = app
         self.pointer = Pointer(self)
         self.pokedex = Pokedex()
+        self.gritos = Gritos()
         self.shake = ShakeMode(self.pointer, self)
-        self.catch = CatchMode(self.pointer, self.pokedex, self)
+        self.catch = CatchMode(self.pointer, self.pokedex, self.gritos, self)
         self.modo = "off"
         self._ultimo_aviso = 0.0
 
@@ -32,6 +34,8 @@ class PokeShake(QObject):
         self.menu.marcar_pokedex(self.pokedex.especies)
         self.menu.modo_escolhido.connect(self.set_modo)
         self.menu.abrir_pokedex.connect(self._mostrar_pokedex)
+        self.menu.alternar_som.connect(self._alternar_som)
+        self.menu.marcar_som(self.gritos.ligado)
         self.menu.sair.connect(app.quit)
         self.pokedex_panel = PokedexPanel(self.pokedex)
         self.pointer.escape_pressed.connect(lambda: self.set_modo("off"))
@@ -59,6 +63,11 @@ class PokeShake(QObject):
         pokedex = QAction("Pokédex", menu)
         pokedex.triggered.connect(self._mostrar_pokedex)
         menu.addAction(pokedex)
+        self.acao_som = QAction("Som do grito", menu)
+        self.acao_som.setCheckable(True)
+        self.acao_som.setChecked(self.gritos.ligado)
+        self.acao_som.triggered.connect(self._alternar_som)
+        menu.addAction(self.acao_som)
         sair = QAction("Sair", menu)
         sair.triggered.connect(self.app.quit)
         menu.addAction(sair)
@@ -95,6 +104,11 @@ class PokeShake(QObject):
 
     def _mostrar_pokedex(self):
         self.pokedex_panel.aparecer()
+
+    def _alternar_som(self):
+        ligado = self.gritos.alternar()
+        self.menu.marcar_som(ligado)
+        self.acao_som.setChecked(ligado)
 
     def _capturou(self, nome):
         self.menu.marcar_pokedex(self.pokedex.especies)

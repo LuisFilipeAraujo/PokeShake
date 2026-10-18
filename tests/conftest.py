@@ -19,7 +19,7 @@ from PyQt6.QtWidgets import QApplication            # noqa: E402
 from pokeshake import config as cfg                 # noqa: E402
 from pokeshake import sprites                       # noqa: E402
 from pokeshake.catch import CatchMode, Wild         # noqa: E402
-from pokeshake.dryrun import EntradaVirtual         # noqa: E402
+from pokeshake.dryrun import EntradaVirtual, GritosMudos   # noqa: E402
 from pokeshake.pointer import Pointer               # noqa: E402
 from pokeshake.pokedex import Pokedex                # noqa: E402
 
@@ -71,15 +71,37 @@ def pointer(app, entrada):
 
 
 @pytest.fixture
+def cache_vazio(tmp_path, monkeypatch):
+    """Cache em diretório novo: nada vem do disco de verdade.
+
+    O recuo da busca de nomes também é zerado: ele vive em variável de módulo,
+    e uma tentativa gasta por outro teste faria o próximo achar que a rede
+    continua fora.
+    """
+    monkeypatch.setattr(cfg, "CACHE_DIR", tmp_path)
+    monkeypatch.setattr(sprites, "_names", None)
+    monkeypatch.setattr(sprites, "_ultima_tentativa_nomes", 0.0)
+    sprites.falhas.limpar()
+    yield tmp_path
+    sprites.falhas.limpar()
+
+
+@pytest.fixture
 def pokedex(tmp_path):
     """Pokédex isolada: nenhum teste pode mexer no progresso real do usuário."""
     return Pokedex(caminho=tmp_path / "pokedex.json")
 
 
 @pytest.fixture
-def catch(app, pointer, pokedex):
+def gritos():
+    """Som registrado em vez de tocado: a suíte roda em silêncio."""
+    return GritosMudos()
+
+
+@pytest.fixture
+def catch(app, pointer, pokedex, gritos):
     """Modo caçada ligado, mas sem aparições sorteadas: cada teste monta a cena."""
-    modo = CatchMode(pointer, pokedex)
+    modo = CatchMode(pointer, pokedex, gritos)
     # o start() solta um Pokémon sorteado; o download chega depois e cairia no
     # meio da cena de outro teste, então a aparição inicial é neutralizada
     modo.solta_pokemon = lambda: None
@@ -142,6 +164,7 @@ def poke(app, entrada, tmp_path, monkeypatch):
     from pokeshake import app as modulo_app
     monkeypatch.setattr(modulo_app, "Pokedex",
                         lambda: Pokedex(caminho=tmp_path / "pokedex.json"))
+    monkeypatch.setattr(modulo_app, "Gritos", GritosMudos)
     instancia = modulo_app.PokeShake(app)
     yield instancia
     instancia.cleanup()

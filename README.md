@@ -41,8 +41,13 @@ vêm da velocidade do cursor nos últimos 140 ms; se você soltar parado, vale o
 trajeto desde onde começou a segurar.
 
 Acertou, capturou: o Pokémon é sugado para dentro da bola, ela balança três
-vezes e a captura é confirmada com faíscas e o nome dele na tela. `Esc` sai do
-modo.
+vezes e a captura é confirmada com faíscas, o nome dele na tela e o **grito do
+Pokémon**. `Esc` sai do modo.
+
+O grito vem do repositório [PokeAPI/cries](https://github.com/PokeAPI/cries) e é
+baixado junto com o sprite, quando o Pokémon aparece — na hora da captura o som
+sai na mesma hora, sem esperar download. Para silenciar, use **Som do grito** no
+menu ou no ícone da bandeja; o volume inicial está em `CRY_VOLUME`.
 
 ### Pokédex
 
@@ -81,6 +86,7 @@ gesto, mude `THROW_GESTURE` em [pokeshake/config.py](pokeshake/config.py) para
 | [pokeshake/shake.py](pokeshake/shake.py) | modo Agitada |
 | [pokeshake/catch.py](pokeshake/catch.py) | modo Caçada: física, colisão e captura |
 | [pokeshake/pokedex.py](pokeshake/pokedex.py) | registro das capturas em disco |
+| [pokeshake/som.py](pokeshake/som.py) | grito na captura e o filtro de ruído do backend |
 | [pokeshake/menu.py](pokeshake/menu.py) | menu overlay, tela da Pokédex e ícone da bandeja |
 | [pokeshake/app.py](pokeshake/app.py) | bandeja e troca de modos |
 
@@ -100,6 +106,14 @@ PokeAPI numa única chamada, também em cache. A Pokédex fica no mesmo lugar, e
   ~13% de um núcleo caçando, ~2% parado.
 - **Coordenadas**: a posição vem do próprio Qt, então a escala de tela do
   Windows (125%, 150%) não desloca os sprites.
+- **Som**: os gritos chegam com extensão `.ogg`, mas o conteúdo é Ogg Vorbis em
+  alguns Pokémon e MP3 em outros — quem decide é o conteúdo, e o backend FFmpeg
+  do Qt toca os dois. Esse backend escreve uma ou duas linhas direto no stderr a
+  cada decodificação ("[mp3float @ 0x…] Could not update timestamps"), fora do
+  log do Qt, então nenhuma variável de ambiente as cala. O stderr é desviado por
+  um cano que descarta só as linhas nesse formato e repassa todo o resto; um
+  traceback que escape de um slot vai direto ao descritor original, porque o
+  PyQt aborta o processo em seguida e a mensagem morreria no cano.
 - **Sem internet**: o app avisa em vez de ficar mudo. No modo Caçada, uma linha
   no HUD diz o que falhou e qual sprite faltou — "o sprite" ou "a pokébola",
   porque não ter bola na mão se parece com arremesso quebrado. No modo Agitada,
@@ -147,6 +161,7 @@ roteirizada pela costura `ler_cursor` / `pressionado` em
 | [tests/test_render.py](tests/test_render.py) | região suja, largura dos textos, custo do quadro |
 | [tests/test_offline.py](tests/test_offline.py) | falha de download: aviso na tela, cache não envenenado, nomes sem travar |
 | [tests/test_pokedex.py](tests/test_pokedex.py) | registro, arquivo estragado, integração com a captura, tela |
+| [tests/test_som.py](tests/test_som.py) | formatos de áudio, roteamento do grito, silêncio, filtro de ruído |
 | [tests/test_app.py](tests/test_app.py) | menu, bandeja, troca de modos, Esc |
 | [tests/test_dryrun.py](tests/test_dryrun.py) | e2e: o app como processo separado |
 
@@ -154,9 +169,11 @@ roteirizada pela costura `ler_cursor` / `pressionado` em
 mesma `main`, mesma bandeja, mesmo menu — e passeia por 18 passos: liga a
 Agitada, sacode o mouse, confere o sprite, troca para a Caçada, espera um
 selvagem aparecer, arremessa a pokébola num alvo plantado, confirma a captura,
-vê se ela entrou na Pokédex e aparece na tela dela, confere o intervalo, derruba
-a rede para ver o aviso aparecer e sai com Esc. A Pokédex do dry run é um
-arquivo descartável: um teste não pode inflar o progresso de verdade. O resultado vira código de saída, então
+vê se ela entrou na Pokédex, se o grito foi pedido e se ela aparece na tela da
+Pokédex, confere o intervalo, derruba a rede para ver o aviso aparecer e sai com
+Esc. A Pokédex do dry run é um arquivo descartável e o som é registrado em vez
+de tocado: um teste não pode inflar o progresso de verdade nem fazer barulho na
+máquina de ninguém. O resultado vira código de saída, então
 serve tanto na mão quanto dentro do pytest.
 
 **Um teste mexe no dispositivo de verdade** e por isso é opt-in: ele injeta um
@@ -185,3 +202,4 @@ As constantes estão todas em [pokeshake/config.py](pokeshake/config.py):
 | `HIT_SHRINK` | área de acerto (1.0 = o sprite inteiro; menor = mais difícil) |
 | `THROW_SPEED_MIN` / `MAX` | limites de força do arremesso |
 | `GRAVITY` | o quanto a bola cai durante o voo |
+| `CRY_VOLUME` | volume do grito, de 0.0 a 1.0; 0 começa mudo |

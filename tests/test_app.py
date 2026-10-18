@@ -13,7 +13,7 @@ def test_sobe_pausado(poke):
 def test_bandeja_lista_os_modos(poke):
     itens = [a.text() for a in poke.tray.contextMenu().actions() if a.text()]
     assert itens == ["Modo Agitada", "Modo Caçada", "Pausado",
-                     "Abrir menu", "Pokédex", "Sair"]
+                     "Abrir menu", "Pokédex", "Som do grito", "Sair"]
 
 
 def test_menu_tem_os_tres_modos(poke, processa):

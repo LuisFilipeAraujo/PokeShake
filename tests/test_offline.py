@@ -49,22 +49,6 @@ class SessaoComStatus:
 
 
 @pytest.fixture
-def cache_vazio(tmp_path, monkeypatch):
-    """Cache em diretório novo: nada vem do disco de verdade.
-
-    O recuo da busca de nomes também é zerado: ele vive em variável de módulo,
-    e uma tentativa gasta por outro teste faria o próximo achar que a rede
-    continua fora.
-    """
-    monkeypatch.setattr(cfg, "CACHE_DIR", tmp_path)
-    monkeypatch.setattr(sprites, "_names", None)
-    monkeypatch.setattr(sprites, "_ultima_tentativa_nomes", 0.0)
-    sprites.falhas.limpar()
-    yield tmp_path
-    sprites.falhas.limpar()
-
-
-@pytest.fixture
 def sem_rede(cache_vazio, monkeypatch):
     sessao = SessaoMorta()
     monkeypatch.setattr(sprites, "_session", sessao)

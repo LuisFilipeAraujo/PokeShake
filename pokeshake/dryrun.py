@@ -20,6 +20,27 @@ from .pokedex import Pokedex
 from PyQt6.QtCore import QPointF
 
 
+class GritosMudos:
+    """Registra em vez de tocar: o dry run roda dentro dos testes, e teste não
+    pode fazer barulho na máquina de ninguém.
+
+    Dublê fiel de propósito — liga, desliga e respeita o estado como o de
+    verdade, senão não serviria para conferir o botão de som.
+    """
+
+    def __init__(self, volume=None, ligado=True, parent=None):
+        self.tocados = []
+        self.ligado = ligado
+
+    def tocar(self, pid):
+        if self.ligado:
+            self.tocados.append(pid)
+
+    def alternar(self):
+        self.ligado = not self.ligado
+        return self.ligado
+
+
 class SessaoMorta:
     """Sem rota para o host: derruba a rede dentro do dry run, para conferir
     que o app avisa em vez de ficar mudo."""
@@ -72,6 +93,9 @@ class DryRun(QObject):
     # ---------------- infraestrutura ----------------
     def start(self):
         self.entrada.instalar()
+        self.gritos = GritosMudos()
+        self.poke.gritos = self.gritos
+        self.poke.catch.gritos = self.gritos
         # Pokédex descartável: um teste não pode inflar o progresso de verdade
         self.pokedex = Pokedex(cfg.CACHE_DIR / "pokedex-dryrun.json")
         self.poke.pokedex = self.pokedex
@@ -264,6 +288,10 @@ class DryRun(QObject):
             if not self.pokedex.caminho.exists():
                 return "a captura não foi gravada em disco"
 
+        def confere_grito():
+            if self.gritos.tocados != [25]:
+                return f"gritos pedidos: {self.gritos.tocados}, esperava [25]"
+
         def confere_tela_pokedex():
             painel = poke.pokedex_panel
             painel.aparecer()
@@ -293,22 +321,28 @@ class DryRun(QObject):
                                            for l in catch._linhas_hud(time.monotonic())):
                 return "HUD não avisou que está procurando"
 
-        def corta_a_rede():
-            self._sessao = sprites._session
-            self._cache = cfg.CACHE_DIR
-            sprites._session = SessaoMorta()
-            cfg.CACHE_DIR = cfg.CACHE_DIR / "_sem_cache"   # nada vem do disco
-            sprites.falhas.limpar()
-            catch.silencio_ate = 0.0
-            catch.spawn.stop()
-            catch.solta_pokemon()                          # vai falhar
+        def corta_a_rede_e_confere_aviso():
+            """Corte, tentativa e conferência no mesmo passo, de propósito.
 
-        def confere_aviso_sem_rede():
-            linhas = catch._linhas_hud(time.monotonic())
-            registrou = sprites.falhas.recente()
-            sprites._session = self._sessao                # devolve a rede
-            cfg.CACHE_DIR = self._cache
+            Deixar a tentativa para uma thread abria uma janela em que um
+            download anterior terminava depois do corte e limpava o aviso —
+            falso negativo intermitente.
+            """
+            sessao, cache = sprites._session, cfg.CACHE_DIR
+            catch.spawn.stop()
+            sprites._session = SessaoMorta()
+            cfg.CACHE_DIR = cache / "_sem_cache"           # nada vem do disco
             sprites.falhas.limpar()
+            try:
+                veio, _ = sprites.fetch_pokemon(777)
+                registrou = sprites.falhas.recente()
+                linhas = catch._linhas_hud(time.monotonic())
+            finally:
+                sprites._session = sessao                  # devolve a rede
+                cfg.CACHE_DIR = cache
+            sprites.falhas.limpar()
+            if veio is not None:
+                return "o sprite apareceu mesmo sem rede"
             if not registrou:
                 return "a queda de rede não foi registrada"
             if not any("Não consegui baixar" in linha for linha in linhas):
@@ -336,11 +370,11 @@ class DryRun(QObject):
             ("pokébola voando na direção certa", confere_voo, 5.0),
             ("captura confirmada", confere_captura, 0.2),
             ("captura entra na Pokédex", confere_pokedex, 0.3),
+            ("captura pede o grito do Pokémon", confere_grito, 0.3),
             ("tela da Pokédex lista o capturado", confere_tela_pokedex, 0.4),
             ("intervalo de expectativa aberto", confere_intervalo, 2.5),
             ("nada aparece durante o intervalo", confere_silencio, 0.2),
-            ("rede cai no meio da caçada", corta_a_rede, 1.5),
-            ("HUD avisa que não deu para baixar", confere_aviso_sem_rede, 0.3),
+            ("rede cai e o HUD avisa", corta_a_rede_e_confere_aviso, 0.3),
             ("Esc volta para pausado", sai_com_esc, 0.2),
         ]
 

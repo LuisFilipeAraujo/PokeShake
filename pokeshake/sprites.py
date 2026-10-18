@@ -57,7 +57,18 @@ class Falhas:
 falhas = Falhas()
 
 
-def _download(url, path, assunto="o sprite", tumulo=True):
+def _parece_imagem(data: bytes) -> bool:
+    return data.startswith(ASSINATURAS)
+
+
+def _parece_audio(data: bytes) -> bool:
+    """Ogg, MP3 com tag ID3, WAV, ou quadro de MP3 cru (11 bits de sincronismo)."""
+    if data.startswith((b"OggS", b"ID3", b"RIFF")):
+        return True
+    return len(data) > 2 and data[0] == 0xFF and (data[1] & 0xE0) == 0xE0
+
+
+def _download(url, path, assunto="o sprite", tumulo=True, valida=None, avisar=True):
     """Baixa para o cache. Devolve os bytes, ou None se não existir.
 
     `tumulo` diz se um 404 pode ser anotado em disco como ausência definitiva.
@@ -65,6 +76,7 @@ def _download(url, path, assunto="o sprite", tumulo=True):
     existir mataria aquele Pokémon para sempre naquela máquina, caso o 404
     tenha vindo da rede e não do repositório.
     """
+    valida = valida or _parece_imagem
     if path.exists():
         return path.read_bytes()
     if path.with_suffix(path.suffix + ".missing").exists():
@@ -72,12 +84,14 @@ def _download(url, path, assunto="o sprite", tumulo=True):
     try:
         r = _session.get(url, timeout=8)
     except requests.RequestException:
-        falhas.registrar("sem conexão", assunto)
+        if avisar:
+            falhas.registrar("sem conexão", assunto)
         return None
     if r.ok and r.content:
-        if not r.content.startswith(ASSINATURAS):
-            falhas.registrar("a rede devolveu outra coisa no lugar da imagem",
-                             assunto)
+        if not valida(r.content):
+            if avisar:
+                falhas.registrar("a rede devolveu outra coisa no lugar da imagem",
+                                 assunto)
             return None
         path.write_bytes(r.content)
         falhas.limpar()
@@ -87,7 +101,8 @@ def _download(url, path, assunto="o sprite", tumulo=True):
         path.with_suffix(path.suffix + ".missing").touch()
         falhas.limpar()
         return None
-    falhas.registrar(f"o servidor respondeu {r.status_code}", assunto)
+    if avisar:
+        falhas.registrar(f"o servidor respondeu {r.status_code}", assunto)
     return None
 
 
@@ -113,6 +128,26 @@ def fetch_ball(name: str):
 
 def random_ball() -> str:
     return random.choice(cfg.BALLS)
+
+
+def _caminho_do_grito(pid: int):
+    return cfg.CACHE_DIR / f"cry-{pid}.ogg"
+
+
+def fetch_cry(pid: int):
+    """Grito do Pokémon.
+
+    Falha aqui não vira aviso na tela: o som é enfeite, e dizer "não consegui
+    baixar" por causa dele assustaria sem motivo.
+    """
+    return _download(cfg.CRY_URL.format(id=pid), _caminho_do_grito(pid),
+                     assunto="o grito", valida=_parece_audio, avisar=False)
+
+
+def arquivo_do_grito(pid: int):
+    """Caminho do grito já em cache, ou None."""
+    caminho = _caminho_do_grito(pid)
+    return caminho if caminho.exists() else None
 
 
 def miniatura(pid: int, lado: int = 64):

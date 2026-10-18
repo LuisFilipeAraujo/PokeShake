@@ -15,6 +15,9 @@ SPRITE_URLS = [
     SPRITES + "/pokemon/{id}.png",                  # estático (reserva)
 ]
 BALL_URL = SPRITES + "/items/{name}.png"
+# os gritos vêm com extensão .ogg, mas o conteúdo é Ogg Vorbis ou MP3,
+# dependendo do Pokémon; quem decide é o conteúdo, não o nome
+CRY_URL = "https://raw.githubusercontent.com/PokeAPI/cries/main/cries/pokemon/latest/{id}.ogg"
 BALLS = ["poke-ball", "great-ball", "ultra-ball", "master-ball", "premier-ball",
          "timer-ball", "dusk-ball", "quick-ball", "net-ball", "heal-ball",
          "luxury-ball", "nest-ball", "repeat-ball", "dive-ball", "level-ball"]
@@ -58,5 +61,8 @@ CELEBRATE_S = 2.2               # duração da comemoração
 PARTICLES = 46                  # faíscas da comemoração
 
 HUD_HINT_S = 6.0                # segundos mostrando a dica do gesto
+CRY_VOLUME = 0.35               # volume do grito, de 0.0 a 1.0; 0 começa mudo
+CRY_ATRASO_MAX_S = 3.0          # grito que chega depois disso não toca mais
+
 AVISO_FALHA_S = 12.0            # por quanto tempo avisar que o download falhou
 NOMES_RETRY_S = 60.0            # recuo antes de tentar a lista de nomes de novo

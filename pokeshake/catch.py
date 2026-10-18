@@ -16,6 +16,7 @@ from PyQt6.QtWidgets import QApplication, QWidget
 from . import config as cfg
 from . import sprites
 from .pokedex import Pokedex
+from .som import Gritos
 
 BRANCO = QColor(255, 255, 255)
 FAISCA = [QColor(255, 226, 120), QColor(255, 255, 255), QColor(255, 176, 60),
@@ -134,10 +135,11 @@ class CatchMode(QObject):
     ball_ready = pyqtSignal(str, bytes)
     captured = pyqtSignal(str)
 
-    def __init__(self, pointer, pokedex=None, parent=None):
+    def __init__(self, pointer, pokedex=None, gritos=None, parent=None):
         super().__init__(parent)
         self.pointer = pointer
         self.pokedex = pokedex if pokedex is not None else Pokedex()
+        self.gritos = gritos if gritos is not None else Gritos()
         self.canvas = None
         self.wilds = []
         self.voando = []
@@ -223,10 +225,11 @@ class CatchMode(QObject):
             data, is_gif = sprites.fetch_pokemon(pid)
             if data:
                 self.pokemon_ready.emit(pid, data, is_gif)
-                # o nome vem depois de entregar o sprite, e aqui na thread de
-                # fundo: na frente do emit, a aparição esperaria o timeout da
-                # lista de nomes; na thread da interface, congelaria a captura
+                # o nome e o grito vêm depois de entregar o sprite, e aqui na
+                # thread de fundo: na frente do emit, a aparição esperaria o
+                # timeout deles; na thread da interface, congelaria a captura
                 sprites.prefetch_names()
+                sprites.fetch_cry(pid)          # pronto antes da captura
         threading.Thread(target=worker, daemon=True).start()
 
     def _em_captura(self) -> bool:
@@ -486,6 +489,7 @@ class CatchMode(QObject):
         pid = bola.alvo.pid
         nome = sprites.pokemon_name(pid)
         novo = self.pokedex.registrar(pid, nome)
+        self.gritos.tocar(pid)
         self.capturados += 1
         self.silencio_ate = agora + random.uniform(cfg.PAUSE_MIN, cfg.PAUSE_MAX)
         self._reagenda_spawn()
