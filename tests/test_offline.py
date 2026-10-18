@@ -3,53 +3,23 @@
 Sem isso o app fica mudo sem internet: nenhum sprite aparece, nada explica o
 motivo, e sacudir o mouse parece defeito.
 """
+import json
 import threading
 import time
 
 import pytest
-import requests
 
 from pokeshake import config as cfg
 from pokeshake import sprites
 from pokeshake.shake import ShakeMode
-
-
-class SessaoMorta:
-    """Sem rota para o host, como quem está sem rede."""
-
-    headers = {}
-
-    def __init__(self):
-        self.chamadas = 0
-
-    def get(self, *a, **k):
-        self.chamadas += 1
-        raise requests.ConnectionError("sem rota para o host")
-
-
-class SessaoComStatus:
-    """Responde sempre com o mesmo status, sem conteúdo útil."""
-
-    headers = {}
-
-    def __init__(self, status):
-        self.status = status
-        self.chamadas = 0
-
-    def get(self, *a, **k):
-        self.chamadas += 1
-        sessao = self
-
-        class R:
-            status_code = sessao.status
-            ok = 200 <= sessao.status < 300
-            content = b""
-        return R()
+from pokeshake.testing import (HTML_DE_PORTAL, PNG_MINIMO, RespostaFalsa,
+                               SessaoFalsa, sessao_com_conteudo,
+                               sessao_com_status, sessao_morta)
 
 
 @pytest.fixture
 def sem_rede(cache_vazio, monkeypatch):
-    sessao = SessaoMorta()
+    sessao = sessao_morta()
     monkeypatch.setattr(sprites, "_session", sessao)
     return sessao
 
@@ -68,27 +38,16 @@ def test_pokebola_tambem_registra(sem_rede):
     assert sprites.falhas.recente()
 
 
-class SessaoSemGif:
-    """404 no GIF animado (caso real de boa parte da Pokédex) e PNG de verdade."""
-
-    headers = {}
-    PNG = bytes.fromhex("89504e470d0a1a0a") + b"resto"
-
-    def get(self, url, *a, **k):
-        sem_gif = url.endswith(".gif")
-        png = self.PNG
-
-        class R:
-            status_code = 404 if sem_gif else 200
-            ok = not sem_gif
-            content = b"" if sem_gif else png
-        return R()
+def sessao_sem_gif():
+    """404 no GIF animado (caso real de boa parte da Pokédex), PNG de verdade."""
+    return SessaoFalsa(por_url=lambda url: RespostaFalsa(404, b"")
+                       if url.endswith(".gif") else RespostaFalsa(200, PNG_MINIMO))
 
 
 def test_gif_ausente_nao_conta_como_falha(cache_vazio, monkeypatch):
     """A falta do GIF animado é esperada e o PNG cobre: avisar o usuário aqui
     seria mentira."""
-    monkeypatch.setattr(sprites, "_session", SessaoSemGif())
+    monkeypatch.setattr(sprites, "_session", sessao_sem_gif())
     data, is_gif = sprites.fetch_pokemon(25)
     assert data and not is_gif
     assert not sprites.falhas.recente()
@@ -98,7 +57,7 @@ def test_gif_ausente_nao_conta_como_falha(cache_vazio, monkeypatch):
 def test_png_ausente_nao_ganha_lapide(cache_vazio, monkeypatch):
     """Rede que responde 404 para tudo (sinkhole de DNS, proxy) mataria o
     Pokémon para sempre naquela máquina se a ausência fosse anotada."""
-    monkeypatch.setattr(sprites, "_session", SessaoComStatus(404))
+    monkeypatch.setattr(sprites, "_session", sessao_com_status(404))
     assert sprites.fetch_pokemon(25) == (None, False)
     assert not (cache_vazio / "25.png.missing").exists()
     assert sprites.falhas.recente(), "404 no PNG é a rede mentindo: tem que avisar"
@@ -107,17 +66,7 @@ def test_png_ausente_nao_ganha_lapide(cache_vazio, monkeypatch):
 def test_portal_cativo_nao_entra_no_cache(cache_vazio, monkeypatch):
     """Wifi de hotel responde 200 com a página de login. Gravar isso criaria um
     Pokémon invisível permanente, que ainda ocupa vaga e pode ser capturado."""
-    class SessaoPortal:
-        headers = {}
-
-        def get(self, *a, **k):
-            class R:
-                status_code = 200
-                ok = True
-                content = b"<html><body>Faca login</body></html>"
-            return R()
-
-    monkeypatch.setattr(sprites, "_session", SessaoPortal())
+    monkeypatch.setattr(sprites, "_session", sessao_com_conteudo(HTML_DE_PORTAL))
     assert sprites.fetch_pokemon(25) == (None, False)
     assert not list(cache_vazio.glob("25.*")), "lixo gravado no cache"
     assert sprites.falhas.recente()
@@ -125,7 +74,7 @@ def test_portal_cativo_nao_entra_no_cache(cache_vazio, monkeypatch):
 
 
 def test_erro_de_servidor_conta_como_falha(cache_vazio, monkeypatch):
-    monkeypatch.setattr(sprites, "_session", SessaoComStatus(503))
+    monkeypatch.setattr(sprites, "_session", sessao_com_status(503))
     assert sprites.fetch_ball("poke-ball") is None
     assert sprites.falhas.recente()
     assert "503" in sprites.falhas.motivo
@@ -142,17 +91,7 @@ def test_download_que_funciona_limpa_o_aviso(cache_vazio, monkeypatch):
     sprites.falhas.registrar("sem conexão")
     assert sprites.falhas.recente()
 
-    class SessaoBoa:
-        headers = {}
-
-        def get(self, *a, **k):
-            class R:
-                status_code = 200
-                ok = True
-                content = b"\x89PNG conteudo"
-            return R()
-
-    monkeypatch.setattr(sprites, "_session", SessaoBoa())
+    monkeypatch.setattr(sprites, "_session", sessao_com_conteudo(PNG_MINIMO))
     assert sprites.fetch_ball("poke-ball")
     assert not sprites.falhas.recente()
 
@@ -185,19 +124,9 @@ def test_lista_vazia_nao_e_memoizada(sem_rede, cache_vazio, monkeypatch):
     se a lista vazia virasse definitiva."""
     assert sprites.pokemon_name(1) == "Pokémon #1"
 
-    class SessaoComNomes:
-        headers = {}
-
-        def get(self, *a, **k):
-            class R:
-                status_code = 200
-                ok = True
-
-                def json(self):
-                    return {"results": [{"name": "bulbasaur"}, {"name": "ivysaur"}]}
-            return R()
-
-    monkeypatch.setattr(sprites, "_session", SessaoComNomes())
+    nomes = json.dumps({"results": [{"name": "bulbasaur"},
+                                    {"name": "ivysaur"}]}).encode()
+    monkeypatch.setattr(sprites, "_session", sessao_com_conteudo(nomes))
     assert sprites.prefetch_names() is True
     assert sprites.pokemon_name(1) == "Bulbasaur"
 
@@ -403,3 +332,39 @@ def test_start_pede_uma_bola_so(app, pointer, pokedex, monkeypatch):
     modo.step()
     modo.stop()
     assert len(pedidos) == 1
+
+
+# ---------------- teto de tamanho ----------------
+
+def test_resposta_gigante_nao_entra_no_cache(cache_vazio, monkeypatch):
+    """Sem teto, a resposta inteira viria para a memória: host comprometido ou
+    URL errada derrubariam o app por falta de memória."""
+    monkeypatch.setattr(cfg, "LIMITE_DOWNLOAD", 1024)
+    monkeypatch.setattr(sprites, "_session",
+                        sessao_com_conteudo(PNG_MINIMO + b"x" * 4096))
+    assert sprites.fetch_ball("poke-ball") is None
+    assert not list(cache_vazio.glob("ball-*.png")), "lixo gravado no cache"
+    assert sprites.falhas.recente()
+    assert "passou de" in sprites.falhas.motivo
+
+
+def test_resposta_dentro_do_teto_passa(cache_vazio, monkeypatch):
+    monkeypatch.setattr(cfg, "LIMITE_DOWNLOAD", 4096)
+    monkeypatch.setattr(sprites, "_session",
+                        sessao_com_conteudo(PNG_MINIMO + b"x" * 100))
+    assert sprites.fetch_ball("poke-ball")
+    assert not sprites.falhas.recente()
+
+
+def test_leitura_limitada_desiste_no_meio():
+    """Desistir no meio é o ponto: não dá para confiar no tamanho anunciado."""
+    assert sprites._ler_limitado(RespostaFalsa(200, b"x" * 50), limite=10) is None
+    assert sprites._ler_limitado(RespostaFalsa(200, b"x" * 5), limite=10) == b"x" * 5
+
+
+def test_lista_de_nomes_gigante_e_recusada(cache_vazio, monkeypatch):
+    monkeypatch.setattr(cfg, "LIMITE_DOWNLOAD", 128)
+    enorme = json.dumps({"results": [{"name": f"p{i}"} for i in range(500)]}).encode()
+    monkeypatch.setattr(sprites, "_session", sessao_com_conteudo(enorme))
+    assert sprites.prefetch_names() is False
+    assert not (cache_vazio / "names.json").exists()

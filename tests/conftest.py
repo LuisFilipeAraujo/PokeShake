@@ -19,7 +19,7 @@ from PyQt6.QtWidgets import QApplication            # noqa: E402
 from pokeshake import config as cfg                 # noqa: E402
 from pokeshake import sprites                       # noqa: E402
 from pokeshake.catch import CatchMode, Wild         # noqa: E402
-from pokeshake.dryrun import EntradaVirtual, GritosMudos   # noqa: E402
+from pokeshake.testing import EntradaVirtual, GritosMudos  # noqa: E402
 from pokeshake.pointer import Pointer               # noqa: E402
 from pokeshake.pokedex import Pokedex                # noqa: E402
 

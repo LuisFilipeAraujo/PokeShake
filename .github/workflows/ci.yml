@@ -34,10 +34,13 @@ jobs:
         with:
           python-version: ${{ matrix.python }}
           cache: pip
-          cache-dependency-path: requirements-dev.txt
+          cache-dependency-path: pyproject.toml
 
+      # instala pelas faixas do pyproject, não pelo constraints.txt: assim o CI
+      # avisa quando uma versão nova de PyQt6 quebra algo, em vez de descobrir
+      # isso só na máquina de quem instalar depois
       - name: Instalar dependências
-        run: pip install -r requirements-dev.txt
+        run: pip install -e ".[dev]"
 
       # os testes baixam sprites de verdade; o cache deixa a execução rápida e
       # tira a rede do caminho crítico. Sem ele a suíte ainda passa: o que não
@@ -51,6 +54,11 @@ jobs:
 
       - name: Restos e imports mortos
         run: python -m pyflakes pokeshake tests
+
+      # falha de propósito quando aparece CVE numa dependência: fica vermelho
+      # sem ninguém ter mexido no código, que é exatamente o aviso desejado
+      - name: Vulnerabilidades conhecidas nas dependências
+        run: python -m pip_audit --progress-spinner off
 
       # "slow" fica de fora: são o custo de quadro e a reprodução de áudio, que
       # dependem de hardware e não dizem nada num runner compartilhado

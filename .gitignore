@@ -1,3 +1,8 @@
 __pycache__/
 *.pyc
 .pytest_cache/
+
+# o projeto agora é instalável: artefatos de build não entram
+*.egg-info/
+build/
+dist/

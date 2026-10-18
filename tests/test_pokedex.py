@@ -210,13 +210,9 @@ def test_tela_mostra_quantas_vezes(app, pokedex, processa):
 
 def test_tela_nao_baixa_nada(app, pokedex, processa, monkeypatch):
     """A tela abre com dezenas de sprites: baixar ali travaria a interface."""
-    class SessaoProibida:
-        headers = {}
-
-        def get(self, *a, **k):
-            raise AssertionError("a tela da Pokédex não pode usar a rede")
-
-    monkeypatch.setattr(sprites, "_session", SessaoProibida())
+    from pokeshake.testing import SessaoFalsa
+    proibida = SessaoFalsa(erro=AssertionError("a tela não pode usar a rede"))
+    monkeypatch.setattr(sprites, "_session", proibida)
     for pid in (25, 6, 94):
         pokedex.registrar(pid, f"Pokémon #{pid}")
     painel = PokedexPanel(pokedex)

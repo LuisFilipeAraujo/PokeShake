@@ -9,70 +9,13 @@ deixa o dry run utilizável tanto na mão quanto dentro dos testes.
 """
 import time
 
-import requests
-from PyQt6.QtCore import QObject, QPoint, QTimer
+from PyQt6.QtCore import QObject, QPointF, QTimer
 
 from . import config as cfg
-from . import pointer as ptr
 from . import sprites
 from .catch import Wild
 from .pokedex import Pokedex
-from PyQt6.QtCore import QPointF
-
-
-class GritosMudos:
-    """Registra em vez de tocar: o dry run roda dentro dos testes, e teste não
-    pode fazer barulho na máquina de ninguém.
-
-    Dublê fiel de propósito — liga, desliga e respeita o estado como o de
-    verdade, senão não serviria para conferir o botão de som.
-    """
-
-    def __init__(self, volume=None, ligado=True, parent=None):
-        self.tocados = []
-        self.ligado = ligado
-
-    def tocar(self, pid):
-        if self.ligado:
-            self.tocados.append(pid)
-
-    def alternar(self):
-        self.ligado = not self.ligado
-        return self.ligado
-
-
-class SessaoMorta:
-    """Sem rota para o host: derruba a rede dentro do dry run, para conferir
-    que o app avisa em vez de ficar mudo."""
-
-    headers = {}
-
-    def get(self, *a, **k):
-        raise requests.ConnectionError("queda de rede simulada pelo dry run")
-
-
-class EntradaVirtual:
-    """Cursor e botão roteirizados no lugar da leitura do dispositivo."""
-
-    def __init__(self, pos=QPoint(400, 400)):
-        self.pos = QPoint(pos)
-        self.segurando = False
-        self._cursor_real = None
-        self._botao_real = None
-
-    def instalar(self):
-        self._cursor_real = ptr.ler_cursor
-        self._botao_real = ptr.pressionado
-        ptr.ler_cursor = lambda: QPoint(self.pos)
-        ptr.pressionado = lambda vk: self.segurando if vk == ptr.VK[cfg.THROW_GESTURE] else False
-
-    def restaurar(self):
-        if self._cursor_real is not None:
-            ptr.ler_cursor = self._cursor_real
-            ptr.pressionado = self._botao_real
-
-    def mover(self, x, y):
-        self.pos = QPoint(int(x), int(y))
+from .testing import EntradaVirtual, GritosMudos, sessao_morta
 
 
 class DryRun(QObject):
@@ -330,7 +273,7 @@ class DryRun(QObject):
             """
             sessao, cache = sprites._session, cfg.CACHE_DIR
             catch.spawn.stop()
-            sprites._session = SessaoMorta()
+            sprites._session = sessao_morta()
             cfg.CACHE_DIR = cache / "_sem_cache"           # nada vem do disco
             sprites.falhas.limpar()
             try:

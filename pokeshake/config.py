@@ -6,7 +6,10 @@ MAX_ID = 1025                   # Pokédex nacional até a Gen 9
 CACHE_DIR = Path.home() / ".poke_shake_cache"
 POLL_MS = 16                    # leitura do cursor e do gesto (~60x por segundo)
 FRAME_MS = 16                   # quadro do modo caçada
-USER_AGENT = "PokeShake/0.2 (app de desktop, uso pessoal)"
+USER_AGENT = "PokeShake/0.3 (app de desktop, uso pessoal)"
+# teto do que entra de fora: uns 40x o maior arquivo de verdade. Sem teto, uma
+# resposta enorme — host comprometido, URL errada — viria inteira para a memória
+LIMITE_DOWNLOAD = 4 * 1024 * 1024
 
 SPRITES = "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites"
 POKEAPI = "https://pokeapi.co/api/v2"

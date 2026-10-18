@@ -1,2 +1,3 @@
-PyQt6
-requests
+# Dependências de execução vivem no pyproject.toml; este arquivo é só o atalho
+# de sempre. Para travar as versões exatas: -c constraints.txt
+-e .

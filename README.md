@@ -8,12 +8,18 @@ sua área de trabalho. Dois modos de jogo, escolhidos num menu overlay.
 ## Uso
 
 ```bash
-pip install -r requirements.txt
-python pokeshake_init.py                 # abre o menu de modos
-python pokeshake_init.py --mode catch    # já começa caçando
-python pokeshake_init.py --mode shake
-python pokeshake_init.py --demo          # mostra um Pokémon e sai
+pip install -e .                 # ou: pip install -e . -c constraints.txt
+
+pokeshake                        # abre o menu de modos
+pokeshake --mode catch           # já começa caçando
+pokeshake --mode shake
+pokeshake --demo                 # mostra um Pokémon e sai
 ```
+
+`python pokeshake_init.py` continua funcionando igual, sem instalar nada. As
+dependências de execução estão no [pyproject.toml](pyproject.toml) com piso e
+teto de versão; [constraints.txt](constraints.txt) tem o conjunto exato já
+verificado, para quando você quiser reproduzir o mesmo ambiente.
 
 Para sair: "Sair do PokeShake" no menu, "Sair" no ícone da bandeja, ou Ctrl+C no
 terminal. O menu abre clicando no ícone da bandeja e pode ser arrastado pelo
@@ -82,6 +88,7 @@ gesto, mude `THROW_GESTURE` em [pokeshake/config.py](pokeshake/config.py) para
 | Arquivo | Papel |
 |---|---|
 | [pokeshake_init.py](pokeshake_init.py) | ponto de entrada |
+| [pyproject.toml](pyproject.toml) | metadados, dependências e configuração de teste |
 | [pokeshake/config.py](pokeshake/config.py) | todas as constantes de ajuste |
 | [pokeshake/sprites.py](pokeshake/sprites.py) | download, cache em disco e preparo dos sprites |
 | [pokeshake/pointer.py](pokeshake/pointer.py) | leitura do cursor e do gesto, sem hooks |
@@ -91,6 +98,7 @@ gesto, mude `THROW_GESTURE` em [pokeshake/config.py](pokeshake/config.py) para
 | [pokeshake/som.py](pokeshake/som.py) | grito na captura e o filtro de ruído do backend |
 | [pokeshake/menu.py](pokeshake/menu.py) | menu overlay, tela da Pokédex e ícone da bandeja |
 | [pokeshake/app.py](pokeshake/app.py) | bandeja e troca de modos |
+| [pokeshake/testing.py](pokeshake/testing.py) | dublês de rede, de mouse e de som, usados pelos testes e pelo dry run |
 
 Os sprites ficam em `~/.poke_shake_cache`, então cada Pokémon só é baixado uma
 vez; IDs sem GIF animado são anotados para não repetir o 404. Os nomes vêm da
@@ -139,12 +147,13 @@ PokeAPI numa única chamada, também em cache. A Pokédex fica no mesmo lugar, e
 ## Qualidade
 
 ```bash
-pip install -r requirements-dev.txt
+pip install -e ".[dev]"
 
 pytest                                # suíte inteira, ~1 min
-pytest -m "not slow"                  # sem os testes de performance
+pytest -m "not slow"                  # sem os que dependem de hardware
 python pokeshake_init.py --dry-run    # só o e2e, direto
 python -m pyflakes pokeshake tests    # restos e imports mortos
+python -m pip_audit                   # vulnerabilidade conhecida nas dependências
 ```
 
 São três camadas:
@@ -206,6 +215,21 @@ um CI útil e um CI que vive vermelho:
 Nenhum teste depende de fonte, DPI ou resolução: a região suja do HUD é medida
 a partir do texto, e as asserções conferem que ela cobre as caixas desenhadas —
 não uma largura fixa em pixels.
+
+O CI instala pelas **faixas** do pyproject, não pelo `constraints.txt`: assim
+ele avisa quando uma versão nova de PyQt6 quebra algo, em vez de isso aparecer
+só na máquina de quem instalar depois. O passo do `pip-audit` falha de
+propósito quando surge CVE numa dependência — fica vermelho sem ninguém ter
+mexido no código, que é justamente o aviso que se quer.
+
+## Segurança
+
+[SECURITY.md](SECURITY.md) tem a fronteira de confiança por escrito: o que é
+baixado, de onde, o que é validado antes de entrar no cache, e qual risco
+permanece. Em resumo: três origens fixas por HTTPS, teto de 4 MB por resposta,
+cabeçalho de arquivo conferido antes de gravar, nenhum `eval`/`exec`/shell, e
+leitura de teclado restrita ao botão configurado enquanto o modo Caçada está
+ligado.
 
 ## Ajustes
 

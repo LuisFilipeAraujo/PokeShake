@@ -10,11 +10,12 @@ import time
 from pathlib import Path
 
 import pytest
-import requests
 
 from pokeshake import config as cfg
 from pokeshake import sprites
 from pokeshake.som import RUIDO_DO_BACKEND, Gritos
+from pokeshake.testing import (HTML_DE_PORTAL, OGG_MINIMO, sessao_com_conteudo,
+                               sessao_morta)
 
 RAIZ = Path(__file__).resolve().parents[1]
 
@@ -59,45 +60,19 @@ def test_grito_vem_em_ogg_ou_mp3(grito_pikachu):
 def test_falha_no_grito_nao_vira_aviso_na_tela(cache_vazio, monkeypatch):
     """O som é enfeite: dizer "não consegui baixar" por causa dele assustaria
     sem motivo, e o jogo continua inteiro."""
-    class SessaoMorta:
-        headers = {}
-
-        def get(self, *a, **k):
-            raise requests.ConnectionError("sem rota")
-
-    monkeypatch.setattr(sprites, "_session", SessaoMorta())
+    monkeypatch.setattr(sprites, "_session", sessao_morta())
     assert sprites.fetch_cry(25) is None
     assert not sprites.falhas.recente(), "falha de grito não pode acender o HUD"
 
 
 def test_portal_cativo_nao_entra_no_cache_de_audio(cache_vazio, monkeypatch):
-    class SessaoPortal:
-        headers = {}
-
-        def get(self, *a, **k):
-            class R:
-                status_code = 200
-                ok = True
-                content = b"<html>login</html>"
-            return R()
-
-    monkeypatch.setattr(sprites, "_session", SessaoPortal())
+    monkeypatch.setattr(sprites, "_session", sessao_com_conteudo(HTML_DE_PORTAL))
     assert sprites.fetch_cry(25) is None
     assert sprites.arquivo_do_grito(25) is None
 
 
 def test_grito_fica_em_cache(cache_vazio, monkeypatch):
-    class SessaoComAudio:
-        headers = {}
-
-        def get(self, *a, **k):
-            class R:
-                status_code = 200
-                ok = True
-                content = b"OggS\x00\x02 conteudo"
-            return R()
-
-    monkeypatch.setattr(sprites, "_session", SessaoComAudio())
+    monkeypatch.setattr(sprites, "_session", sessao_com_conteudo(OGG_MINIMO))
     assert sprites.fetch_cry(25)
     assert sprites.arquivo_do_grito(25) == cache_vazio / "cry-25.ogg"
 
@@ -126,17 +101,7 @@ def test_grito_em_cache_toca_na_hora(app, grito_pikachu, monkeypatch):
 
 
 def test_sem_cache_baixa_e_toca_depois(app, cache_vazio, espera, monkeypatch):
-    class SessaoComAudio:
-        headers = {}
-
-        def get(self, *a, **k):
-            class R:
-                status_code = 200
-                ok = True
-                content = b"OggS\x00\x02 conteudo"
-            return R()
-
-    monkeypatch.setattr(sprites, "_session", SessaoComAudio())
+    monkeypatch.setattr(sprites, "_session", sessao_com_conteudo(OGG_MINIMO))
     tocados = []
     gritos = Gritos(volume=0.0, ligado=True)
     monkeypatch.setattr(gritos, "_toca", lambda c: tocados.append(c))

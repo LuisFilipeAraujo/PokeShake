@@ -1,0 +1,52 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pokeshake"
+version = "0.3.0"
+description = "Pokémon da PokeAPI como overlay na área de trabalho do Windows"
+readme = "README.md"
+requires-python = ">=3.12"
+license = "MIT"
+authors = [{ name = "Luis Filipe Alves Araujo" }]
+keywords = ["pokemon", "overlay", "desktop", "pyqt6", "windows"]
+classifiers = [
+    "Environment :: Win32 (MS Windows)",
+    "Operating System :: Microsoft :: Windows",
+    "Programming Language :: Python :: 3",
+    "Topic :: Games/Entertainment",
+]
+
+# Piso e teto de propósito. O teto barra a próxima versão maior, que pode mudar
+# a API sem aviso; o piso é a versão em que isto foi de fato verificado — o
+# backend FFmpeg do Qt, que toca os gritos, e o `virtualGeometry` usado pelo
+# canvas de tela cheia dependem de Qt 6 recente.
+dependencies = [
+    "PyQt6>=6.11,<7",
+    "requests>=2.32,<3",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=9.1,<10",
+    "pyflakes>=4.0,<5",
+    "pip-audit>=2.10,<3",
+]
+
+[project.urls]
+Repository = "https://github.com/LuisFilipeAraujo/PokeShake"
+
+[project.scripts]
+pokeshake = "pokeshake.app:main"
+
+[tool.setuptools]
+packages = ["pokeshake"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-ra --strict-markers"
+markers = [
+    "slow: dependem de hardware (custo de quadro, reprodução de áudio)",
+]

@@ -1,0 +1,14 @@
+version: 2
+updates:
+  # as faixas de versão vivem no pyproject.toml; o constraints.txt é o conjunto
+  # exato já verificado e é atualizado à mão quando uma faixa muda
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"

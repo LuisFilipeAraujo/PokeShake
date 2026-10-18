@@ -68,6 +68,22 @@ def _parece_audio(data: bytes) -> bool:
     return len(data) > 2 and data[0] == 0xFF and (data[1] & 0xE0) == 0xE0
 
 
+def _ler_limitado(resposta, limite=None):
+    """Lê a resposta em pedaços e desiste se passar do limite.
+
+    `r.content` traria a resposta inteira para a memória de uma vez: um host
+    comprometido, ou uma URL que aponte para um arquivo enorme, derrubaria o app
+    por falta de memória. Devolve None quando estoura.
+    """
+    limite = cfg.LIMITE_DOWNLOAD if limite is None else limite
+    dados = bytearray()
+    for pedaco in resposta.iter_content(16384):
+        dados += pedaco
+        if len(dados) > limite:
+            return None
+    return bytes(dados)
+
+
 def _download(url, path, assunto="o sprite", tumulo=True, valida=None, avisar=True):
     """Baixa para o cache. Devolve os bytes, ou None se não existir.
 
@@ -82,28 +98,36 @@ def _download(url, path, assunto="o sprite", tumulo=True, valida=None, avisar=Tr
     if path.with_suffix(path.suffix + ".missing").exists():
         return None
     try:
-        r = _session.get(url, timeout=8)
+        with _session.get(url, timeout=8, stream=True) as r:
+            if r.status_code == 404 and tumulo:
+                # nem todo Pokémon tem sprite animado; anota para não repetir
+                path.with_suffix(path.suffix + ".missing").touch()
+                falhas.limpar()
+                return None
+            if not r.ok:
+                if avisar:
+                    falhas.registrar(f"o servidor respondeu {r.status_code}",
+                                     assunto)
+                return None
+            dados = _ler_limitado(r)
     except requests.RequestException:
         if avisar:
             falhas.registrar("sem conexão", assunto)
         return None
-    if r.ok and r.content:
-        if not valida(r.content):
-            if avisar:
-                falhas.registrar("a rede devolveu outra coisa no lugar da imagem",
-                                 assunto)
-            return None
-        path.write_bytes(r.content)
-        falhas.limpar()
-        return r.content
-    if r.status_code == 404 and tumulo:
-        # nem todo Pokémon tem sprite animado; anota para não repetir o 404
-        path.with_suffix(path.suffix + ".missing").touch()
-        falhas.limpar()
+
+    if dados is None:
+        if avisar:
+            falhas.registrar(f"a resposta passou de "
+                             f"{cfg.LIMITE_DOWNLOAD // 1024} KB", assunto)
         return None
-    if avisar:
-        falhas.registrar(f"o servidor respondeu {r.status_code}", assunto)
-    return None
+    if not dados or not valida(dados):
+        if avisar:
+            falhas.registrar("a rede devolveu outra coisa no lugar da imagem",
+                             assunto)
+        return None
+    path.write_bytes(dados)
+    falhas.limpar()
+    return dados
 
 
 def fetch_pokemon(pid: int):
@@ -224,12 +248,19 @@ def _nomes_do_disco():
 def _baixar_nomes():
     """Os 1025 nomes vêm numa chamada só, de uns 68 KB."""
     try:
-        r = _session.get(f"{cfg.POKEAPI}/pokemon?limit={cfg.MAX_ID}", timeout=10)
-        if r.ok:
-            nomes = {str(i + 1): p["name"] for i, p in enumerate(r.json()["results"])}
-            (cfg.CACHE_DIR / "names.json").write_text(json.dumps(nomes), encoding="utf-8")
-            return nomes
-    except (requests.RequestException, ValueError, KeyError, OSError):
+        with _session.get(f"{cfg.POKEAPI}/pokemon?limit={cfg.MAX_ID}",
+                          timeout=10, stream=True) as r:
+            if not r.ok:
+                return None
+            dados = _ler_limitado(r)        # mesmo teto do resto
+        if not dados:
+            return None
+        lista = json.loads(dados)["results"]
+        nomes = {str(i + 1): p["name"] for i, p in enumerate(lista)}
+        (cfg.CACHE_DIR / "names.json").write_text(json.dumps(nomes),
+                                                  encoding="utf-8")
+        return nomes
+    except (requests.RequestException, ValueError, KeyError, TypeError, OSError):
         pass
     return None
 
